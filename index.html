@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LAST CIRCLE — 배틀로얄</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }</script>
+<style>
+:root{--acc:#ffb547;--acc2:#5fd3ff;--bad:#ff4d4d;--ok:#5dff8f;--panel:rgba(12,16,22,.72);--line:rgba(255,255,255,.12);--txt:#eef2f6;--dim:#9aa6b2}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden;background:#0b0e12;color:var(--txt);font-family:'Noto Sans KR',system-ui,sans-serif;user-select:none;-webkit-user-select:none}
+canvas#gl{position:fixed;inset:0;width:100%;height:100%;display:block}
+.num{font-family:'Rajdhani','Noto Sans KR',sans-serif;font-weight:700;letter-spacing:.02em}
+.screen{position:fixed;inset:0;display:none}
+.screen.on{display:block}
+button{font-family:inherit;cursor:pointer;border:0;color:inherit}
+input,select{font-family:inherit}
+.btn{background:rgba(255,255,255,.08);border:1px solid var(--line);padding:12px 18px;border-radius:6px;font-weight:700;font-size:15px;transition:.15s;color:var(--txt)}
+.btn:hover{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.3)}
+.btn.pri{background:linear-gradient(180deg,#ffc66b,#f39a1e);color:#1b1206;border:0;box-shadow:0 6px 20px rgba(243,154,30,.3)}
+.btn.pri:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.4;cursor:default}
+.field{background:rgba(0,0,0,.4);border:1px solid var(--line);color:var(--txt);padding:12px 14px;border-radius:6px;font-size:15px;outline:none;width:100%}
+.field:focus{border-color:var(--acc)}
+/* ===== menu ===== */
+#menu{background:linear-gradient(90deg,rgba(6,9,13,.92) 0%,rgba(6,9,13,.7) 34%,rgba(6,9,13,0) 62%)}
+.menuWrap{position:absolute;left:6vw;top:0;bottom:0;width:min(420px,88vw);overflow:auto;padding:4vh 0;display:flex;flex-direction:column;justify-content:center}
+.menuWrap>*{flex:none}
+.logo{font-family:'Rajdhani';font-weight:700;font-size:64px;line-height:.85;letter-spacing:.04em}
+.logo b{color:var(--acc)}
+.logo small{display:block;font-family:'Noto Sans KR';font-size:14px;letter-spacing:.5em;color:var(--dim);font-weight:500;margin-top:10px}
+.mcard{margin-top:18px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;backdrop-filter:blur(8px)}
+.mcard h4{font-size:12px;color:var(--dim);font-weight:500;letter-spacing:.12em;margin-bottom:8px}
+.row{display:flex;gap:8px;align-items:center}
+.swatches{display:flex;gap:6px;margin-top:10px}
+.sw{width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer}
+.sw.on{border-color:#fff;transform:scale(1.1)}
+.sep{height:1px;background:var(--line);margin:12px 0}
+#netStatus{font-size:12px;color:var(--dim);margin-top:12px;display:flex;gap:6px;align-items:center}
+.dot{width:8px;height:8px;border-radius:50%;background:#888;display:inline-block}
+.dot.ok{background:var(--ok);box-shadow:0 0 8px var(--ok)}.dot.bad{background:#e0a030}
+.menuFoot{position:absolute;right:24px;bottom:18px;font-size:12px;color:var(--dim);text-align:right}
+.practiceOpts{display:flex;gap:8px;margin-top:8px}
+.practiceOpts select{flex:1}
+select.field{padding:9px 10px}
+/* ===== lobby ===== */
+#lobby{background:radial-gradient(ellipse at 70% 40%,rgba(6,9,13,.25),rgba(6,9,13,.88))}
+.lobbyWrap{position:absolute;inset:5vh 4vw;display:grid;grid-template-columns:1.4fr 1fr;gap:20px}
+.lpanel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:20px;backdrop-filter:blur(8px);display:flex;flex-direction:column;min-height:0}
+.codeBox{display:flex;align-items:center;gap:14px}
+.code{font-family:'Rajdhani';font-size:54px;font-weight:700;letter-spacing:.18em;color:var(--acc);line-height:1}
+.teams{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:16px;overflow:auto}
+.team{border:1px solid var(--line);border-radius:8px;padding:10px;background:rgba(255,255,255,.03);cursor:pointer;min-height:96px}
+.team:hover{border-color:rgba(255,255,255,.3)}
+.team.mine{border-color:var(--acc)}
+.team h5{font-size:12px;letter-spacing:.1em;margin-bottom:8px;display:flex;justify-content:space-between}
+.pl{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:14px}
+.pl .c{width:10px;height:10px;border-radius:2px}
+.tag{font-size:10px;padding:2px 6px;border-radius:3px;background:rgba(255,181,71,.2);color:var(--acc);font-weight:700}
+.tag.rd{background:rgba(93,255,143,.15);color:var(--ok)}
+.setGrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.setGrid label{font-size:12px;color:var(--dim)}
+.chat{flex:1;overflow:auto;margin-top:12px;font-size:13px;line-height:1.6;background:rgba(0,0,0,.25);border-radius:6px;padding:10px;min-height:80px}
+.chat b{color:var(--acc2);font-weight:500}
+.hint{font-size:12px;color:var(--dim);line-height:1.6}
+/* ===== loading ===== */
+#loading{background:#0b0e12;display:none;align-items:center;justify-content:center;flex-direction:column}
+#loading.on{display:flex}
+.lbar{width:320px;height:4px;background:rgba(255,255,255,.1);border-radius:2px;margin-top:22px;overflow:hidden}
+.lbar i{display:block;height:100%;width:0;background:var(--acc);transition:width .2s}
+#loadTxt{margin-top:10px;font-size:13px;color:var(--dim)}
+/* ===== HUD ===== */
+#hud{pointer-events:none}
+#hud .pe{pointer-events:auto}
+#compass{position:absolute;top:14px;left:50%;transform:translateX(-50%);width:520px;height:34px;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent);mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent)}
+#compassStrip{position:absolute;top:0;left:0;height:100%;white-space:nowrap}
+.ctick{position:absolute;top:0;width:1px;background:rgba(255,255,255,.7)}
+.clab{position:absolute;top:14px;transform:translateX(-50%);font-family:Rajdhani;font-weight:700;font-size:15px;text-shadow:0 1px 3px #000}
+.clab.card{color:var(--acc);font-size:17px}
+#bearing{position:absolute;top:50px;left:50%;transform:translateX(-50%);font-family:Rajdhani;font-weight:700;font-size:15px;background:rgba(0,0,0,.45);padding:1px 8px;border-radius:3px}
+#bearing:before{content:'';position:absolute;top:-6px;left:50%;margin-left:-5px;border:5px solid transparent;border-bottom-color:#fff;border-top:0}
+.cmark{position:absolute;top:2px;width:10px;height:10px;transform:translateX(-50%) rotate(45deg);border:2px solid #000}
+#topRight{position:absolute;top:14px;right:18px;text-align:right}
+.counts{display:inline-flex;gap:2px}
+.cbox{background:rgba(0,0,0,.5);padding:6px 12px;font-size:13px;color:var(--dim)}
+.cbox b{font-family:Rajdhani;font-size:24px;color:#fff;margin-left:6px;vertical-align:-2px}
+.cbox.k b{color:var(--acc)}
+#feed{margin-top:10px;display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.fe{background:rgba(0,0,0,.45);padding:4px 10px;font-size:13px;border-radius:3px;animation:fin .25s}
+.fe.mine{background:rgba(255,181,71,.25)}.fe.team{background:rgba(255,77,77,.25)}
+.fe .w{color:var(--dim);margin:0 6px;font-size:12px}
+.fe .hd{color:var(--bad);font-weight:700}
+@keyframes fin{from{opacity:0;transform:translateX(20px)}}
+#minimapWrap{position:absolute;left:18px;top:18px;width:216px}
+#minimap{width:216px;height:216px;border-radius:6px;border:1px solid rgba(255,255,255,.25);background:#1d3d4a;display:block}
+#zoneInfo{margin-top:6px;background:rgba(0,0,0,.5);border-radius:4px;padding:6px 10px;font-size:12px;display:flex;justify-content:space-between;align-items:center}
+#zoneInfo .t{font-family:Rajdhani;font-weight:700;font-size:18px}
+#zoneInfo.shr .t{color:var(--acc2)}
+#zoneBar{height:3px;background:rgba(255,255,255,.15);margin-top:4px;border-radius:2px;overflow:hidden}
+#zoneBar i{display:block;height:100%;background:var(--acc2)}
+#runTip{margin-top:4px;font-size:12px;color:#fff;background:rgba(40,90,200,.55);padding:4px 10px;border-radius:4px;display:none}
+#teamList{position:absolute;left:18px;bottom:84px;width:210px}
+.tm{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:13px;text-shadow:0 1px 2px #000}
+.tm .n{width:18px;height:18px;border-radius:3px;font-family:Rajdhani;font-weight:700;color:#000;text-align:center;line-height:18px;font-size:13px}
+.tm .hb{flex:1;height:5px;background:rgba(0,0,0,.5);border-radius:2px;overflow:hidden}
+.tm .hb i{display:block;height:100%;background:#fff}
+.tm.down .hb i{background:var(--bad)}.tm.dead{opacity:.4}
+#bottom{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);width:440px}
+#gear{display:flex;gap:6px;justify-content:center;margin-bottom:6px}
+.gi{width:46px;height:34px;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.12);border-radius:4px;position:relative;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--dim)}
+.gi b{font-family:Rajdhani;font-size:16px;color:#fff;margin-left:2px}
+.gi .du{position:absolute;left:3px;right:3px;bottom:2px;height:2px;background:rgba(255,255,255,.15)}
+.gi .du i{display:block;height:100%;background:var(--acc2)}
+.gi.off{opacity:.35}
+#boost{display:flex;gap:2px;height:4px;margin-bottom:3px}
+#boost i{flex:1;background:rgba(255,255,255,.12)}
+#boost i.on{background:var(--acc)}
+#hpWrap{height:12px;background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.25);position:relative;overflow:hidden}
+#hpLag{position:absolute;inset:0;width:100%;background:#ff7a7a;transition:width .6s .2s}
+#hpFill{position:absolute;inset:0;width:100%;background:#f4f4f4;transition:width .1s}
+#hpWrap.low #hpFill{background:var(--bad)}
+#hpWrap.kn #hpFill{background:#ff4d4d}
+#hpNum{position:absolute;right:-40px;top:-6px;font-family:Rajdhani;font-weight:700;font-size:18px}
+#weapon{position:absolute;right:22px;bottom:22px;text-align:right;min-width:240px}
+#slots{display:flex;flex-direction:column;gap:4px;align-items:flex-end;margin-bottom:10px}
+.slot{background:rgba(0,0,0,.4);padding:4px 10px;border-radius:3px;font-size:12px;color:var(--dim);display:flex;gap:8px;align-items:center;border-right:3px solid transparent}
+.slot.on{color:#fff;background:rgba(0,0,0,.6);border-right-color:var(--acc)}
+.slot .k{font-family:Rajdhani;font-weight:700;color:var(--dim)}
+#wName{font-size:14px;font-weight:700;color:var(--dim)}
+#wAmmo{font-size:54px;line-height:.95}
+#wAmmo small{font-size:24px;color:var(--dim);margin-left:4px}
+#wAmmo.empty{color:var(--bad)}
+#wMode{font-size:12px;color:var(--acc);letter-spacing:.1em}
+#quick{position:absolute;left:18px;bottom:22px;display:flex;gap:4px}
+.qi{background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.12);border-radius:4px;padding:4px 7px;font-size:11px;text-align:center;min-width:44px;color:var(--dim)}
+.qi b{display:block;font-family:Rajdhani;font-size:16px;color:#fff}
+.qi.none{opacity:.3}
+#cross{position:absolute;left:50%;top:50%;width:0;height:0}
+#cross i{position:absolute;background:#fff;box-shadow:0 0 2px #000}
+#cross .t,#cross .b{width:2px;height:8px;left:-1px}
+#cross .l,#cross .r{height:2px;width:8px;top:-1px}
+#cross .c{width:3px;height:3px;left:-1.5px;top:-1.5px;border-radius:50%}
+#hitm{position:absolute;left:50%;top:50%;width:30px;height:30px;margin:-15px 0 0 -15px;opacity:0}
+#hitm i{position:absolute;width:10px;height:2px;background:#fff;top:14px}
+#hitm i:nth-child(1){left:-2px;transform:rotate(45deg) translateX(-4px)}
+#hitm i:nth-child(2){right:-2px;transform:rotate(-45deg) translateX(4px)}
+#hitm i:nth-child(3){left:-2px;transform:rotate(-45deg) translateX(-4px)}
+#hitm i:nth-child(4){right:-2px;transform:rotate(45deg) translateX(4px)}
+#hitm.head i{background:#ff5050}
+#hitm.kill i{background:#ff2020;width:14px}
+#scope{position:absolute;inset:0;display:none}
+#scope.on{display:block}
+#scope .ring{position:absolute;left:50%;top:50%;width:min(86vh,86vw);height:min(86vh,86vw);transform:translate(-50%,-50%);border-radius:50%;box-shadow:0 0 0 200vmax #000,inset 0 0 60px 20px rgba(0,0,0,.85)}
+#scope svg{position:absolute;left:50%;top:50%;width:min(86vh,86vw);height:min(86vh,86vw);transform:translate(-50%,-50%)}
+#reticle{position:absolute;left:50%;top:50%;display:none}
+#reticle.on{display:block}
+#prompt{position:absolute;left:50%;top:60%;transform:translateX(-50%);background:rgba(0,0,0,.6);padding:7px 14px;border-radius:4px;font-size:14px;display:none;border-left:3px solid var(--acc)}
+#prog{position:absolute;left:50%;top:66%;transform:translateX(-50%);width:260px;display:none;text-align:center;font-size:13px}
+#prog .bar{height:5px;background:rgba(0,0,0,.5);margin-top:6px;border-radius:3px;overflow:hidden}
+#prog .bar i{display:block;height:100%;background:var(--acc);width:0}
+#banner{position:absolute;left:50%;top:18%;transform:translateX(-50%);text-align:center;pointer-events:none}
+.bn{background:linear-gradient(90deg,transparent,rgba(0,0,0,.7) 20%,rgba(0,0,0,.7) 80%,transparent);padding:10px 80px;font-size:17px;font-weight:700;margin-bottom:6px;animation:bnin .35s}
+.bn.warn{color:#ffd0d0}.bn.zone{color:#bfe8ff}.bn.care{color:#ffd9a0}
+@keyframes bnin{from{opacity:0;transform:scaleX(.6)}}
+#big{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);font-size:22px;font-weight:900;text-shadow:0 2px 10px #000;opacity:0;transition:opacity .3s;text-align:center}
+#big.kill{color:var(--acc)}#big.knock{color:#ffd0a0}
+#toasts{position:absolute;left:50%;bottom:150px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:4px}
+.toast{background:rgba(0,0,0,.55);padding:4px 12px;border-radius:3px;font-size:13px;animation:fin .2s}
+.toast.warn{color:#ffc0a0}
+#dmg{position:absolute;inset:0;box-shadow:inset 0 0 160px rgba(200,0,0,.0);transition:box-shadow .5s}
+#dirs{position:absolute;left:50%;top:50%}
+.dd{position:absolute;width:120px;height:120px;margin:-60px;border-radius:50%;border-top:6px solid rgba(255,40,40,.85);opacity:1;transition:opacity 1.2s}
+#zoneVig{position:absolute;inset:0;background:radial-gradient(ellipse at center,transparent 50%,rgba(40,80,255,.35));opacity:0;transition:opacity .4s}
+#alt{position:absolute;right:30%;top:40%;font-size:13px;color:var(--dim);display:none;text-align:right}
+#alt b{display:block;font-size:34px;color:#fff}
+#planeHint{position:absolute;left:50%;bottom:200px;transform:translateX(-50%);background:rgba(0,0,0,.6);padding:10px 22px;border-radius:6px;font-size:16px;display:none;text-align:center}
+#planeHint b{color:var(--acc)}
+#tags{position:absolute;inset:0;overflow:hidden}
+.ntag{position:absolute;transform:translate(-50%,-100%);font-size:12px;font-weight:700;text-shadow:0 1px 3px #000;white-space:nowrap;text-align:center}
+.ntag small{display:block;font-weight:500;font-size:11px;color:#ddd}
+.mpin{position:absolute;transform:translate(-50%,-100%);font-family:Rajdhani;font-weight:700;font-size:13px;text-shadow:0 1px 3px #000;text-align:center}
+.mpin:before{content:'';display:block;margin:0 auto 2px;width:12px;height:12px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:currentColor}
+#specInfo{position:absolute;left:50%;bottom:60px;transform:translateX(-50%);background:rgba(0,0,0,.6);padding:8px 18px;border-radius:5px;font-size:14px;display:none;text-align:center}
+#clickPlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.35);pointer-events:auto;cursor:pointer}
+#clickPlay.on{display:flex}
+#clickPlay div{background:var(--panel);border:1px solid var(--line);padding:22px 34px;border-radius:10px;text-align:center;font-size:18px;font-weight:700}
+#clickPlay small{display:block;font-size:12px;color:var(--dim);font-weight:400;margin-top:6px}
+#netWarn{position:absolute;top:60px;right:18px;font-size:12px;color:#ffc070;display:none}
+/* ===== overlays ===== */
+.ov{position:fixed;inset:0;display:none;background:rgba(5,8,12,.78);backdrop-filter:blur(4px);z-index:20}
+.ov.on{display:block}
+.ovClose{position:absolute;top:16px;right:20px;font-size:13px;color:var(--dim)}
+#inv .grid{position:absolute;inset:6vh 4vw;display:grid;grid-template-columns:1fr 1.1fr 1.3fr;gap:18px}
+.ip{background:rgba(255,255,255,.04);border:1px solid var(--line);border-radius:8px;padding:14px;overflow:auto}
+.ip h3{font-size:12px;letter-spacing:.14em;color:var(--dim);margin-bottom:10px;display:flex;justify-content:space-between}
+.it{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:5px;background:rgba(255,255,255,.04);margin-bottom:5px;cursor:pointer;font-size:13px;border:1px solid transparent}
+.it:hover{border-color:var(--acc);background:rgba(255,181,71,.08)}
+.it .ic{width:30px;height:30px;border-radius:4px;flex:none;display:flex;align-items:center;justify-content:center;font-family:Rajdhani;font-weight:700;font-size:11px;color:#111}
+.it .q{margin-left:auto;font-family:Rajdhani;font-weight:700;font-size:16px}
+.it .sub{display:block;font-size:11px;color:var(--dim)}
+.capbar{height:5px;background:rgba(255,255,255,.1);border-radius:3px;overflow:hidden;margin-bottom:12px}
+.capbar i{display:block;height:100%;background:var(--acc2)}
+.wcard{border:1px solid var(--line);border-radius:7px;padding:10px;margin-bottom:10px;background:rgba(0,0,0,.2)}
+.wcard.on{border-color:var(--acc)}
+.wcard .wt{display:flex;justify-content:space-between;font-weight:700}
+.wcard .wt span{font-family:Rajdhani;color:var(--dim)}
+.atts{display:flex;gap:6px;margin-top:8px}
+.att{flex:1;border:1px dashed rgba(255,255,255,.18);border-radius:4px;padding:6px 4px;font-size:11px;text-align:center;color:var(--dim);min-height:38px;cursor:pointer}
+.att.has{border-style:solid;color:#fff;background:rgba(95,211,255,.1);border-color:rgba(95,211,255,.4)}
+.att.na{opacity:.25;cursor:default}
+.eqrow{display:flex;gap:8px;margin-bottom:12px}
+.eq{flex:1;border:1px solid var(--line);border-radius:6px;padding:8px;text-align:center;font-size:12px;cursor:pointer;color:var(--dim)}
+.eq b{display:block;color:#fff;font-size:13px}
+#map canvas{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);border-radius:8px;box-shadow:0 0 0 1px rgba(255,255,255,.2);cursor:crosshair}
+#mapHelp{position:absolute;left:50%;bottom:16px;transform:translateX(-50%);font-size:12px;color:var(--dim)}
+#result{background:radial-gradient(ellipse at center,rgba(0,0,0,.55),rgba(0,0,0,.88))}
+.res{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);text-align:center;width:min(640px,92vw)}
+.res .rk{font-family:Rajdhani;font-size:30px;color:var(--dim)}
+.res .rk b{font-size:96px;color:#fff;line-height:1}
+.res h1{font-size:40px;font-weight:900;margin:6px 0 20px}
+.res h1.win{color:var(--acc);text-shadow:0 0 40px rgba(255,181,71,.5)}
+.stats{display:flex;justify-content:center;gap:12px;margin-bottom:26px}
+.stat{background:rgba(255,255,255,.05);border:1px solid var(--line);border-radius:8px;padding:12px 20px;min-width:110px}
+.stat b{display:block;font-family:Rajdhani;font-size:30px}
+.stat span{font-size:12px;color:var(--dim)}
+#pause .box,#help .box{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(520px,92vw);background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:24px}
+.sr{display:flex;align-items:center;justify-content:space-between;margin:12px 0;font-size:14px;gap:12px}
+.sr input[type=range]{flex:1;max-width:240px;accent-color:var(--acc)}
+.sr span{font-family:Rajdhani;font-weight:700;width:38px;text-align:right}
+.keys{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px;margin-top:10px}
+.keys kbd{font-family:Rajdhani;font-weight:700;background:rgba(255,255,255,.1);border:1px solid var(--line);border-radius:3px;padding:1px 7px;text-align:center;white-space:nowrap}
+@media (max-width:900px){.lobbyWrap{grid-template-columns:1fr;overflow:auto}#compass{width:300px}#quick{display:none}}
+@media (max-height:640px){#minimapWrap{width:170px}#minimap{width:170px;height:170px}}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="vig" style="position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse at center,rgba(0,0,0,0) 55%,rgba(0,0,0,.38) 100%);z-index:0"></div>
+
+<div id="loading" class="screen on"><div class="logo">LAST<b>CIRCLE</b></div><div class="lbar"><i id="loadBar"></i></div><div id="loadTxt">준비 중…</div></div>
+
+<div id="menu" class="screen">
+  <div class="menuWrap">
+    <div class="logo">LAST <b>CIRCLE</b><small>최후의 원 · 배틀로얄</small></div>
+    <div class="mcard">
+      <h4>닉네임</h4>
+      <input id="nameIn" class="field" maxlength="14" placeholder="닉네임 입력">
+      <div class="swatches" id="swatches"></div>
+      <div class="sep"></div>
+      <h4>친구와 플레이</h4>
+      <button class="btn pri" id="bCreate" style="width:100%">방 만들기</button>
+      <div class="row" style="margin-top:8px"><input id="codeIn" class="field num" maxlength="8" placeholder="방 코드 입력" style="text-transform:uppercase;letter-spacing:.2em"><button class="btn" id="bJoin" style="white-space:nowrap;flex:none">입장</button></div>
+      <div id="netStatus"><span class="dot" id="netDot"></span><span id="netTxt">연결 확인 중…</span></div>
+      <div class="sep"></div>
+      <h4>혼자 연습 (봇전)</h4>
+      <div class="practiceOpts">
+        <select id="pBots" class="field"><option value="15">봇 15명</option><option value="24" selected>봇 24명</option><option value="32">봇 32명</option></select>
+        <select id="pDiff" class="field"><option value="0">쉬움</option><option value="1" selected>보통</option><option value="2">어려움</option></select>
+        <select id="pSpeed" class="field"><option value="0.6">빠른 경기</option><option value="1" selected>일반</option></select>
+      </div>
+      <button class="btn" id="bPractice" style="width:100%;margin-top:8px">연습 시작</button>
+      <div class="row" style="margin-top:12px;justify-content:space-between"><button class="btn" id="bHelp" style="flex:1">조작법</button><button class="btn" id="bSettings" style="flex:1">설정</button></div>
+    </div>
+  </div>
+  <div class="menuFoot">LAST CIRCLE · 오리지널 브라우저 배틀로얄<br>마우스 + 키보드 권장</div>
+</div>
+
+<div id="lobby" class="screen">
+  <div class="lobbyWrap">
+    <div class="lpanel">
+      <div class="hint">방 코드 — 친구에게 알려주세요</div>
+      <div class="codeBox"><div class="code" id="lCode">-----</div><button class="btn" id="bCopy">복사</button></div>
+      <div class="hint" style="margin-top:8px">친구가 이 페이지를 열고 코드를 입력하면 같은 방에 들어옵니다. 팀 칸을 눌러 팀을 고르세요.</div>
+      <div class="teams" id="lTeams"></div>
+    </div>
+    <div class="lpanel">
+      <h4 style="font-size:12px;color:var(--dim);letter-spacing:.12em">경기 설정 <span id="lHostTag" class="tag" style="margin-left:6px"></span></h4>
+      <div class="setGrid">
+        <div><label>모드</label><select id="sMode" class="field"><option value="1">솔로</option><option value="2">듀오</option><option value="4">스쿼드</option></select></div>
+        <div><label>봇 수</label><select id="sBots" class="field"><option value="0">없음</option><option value="8">8명</option><option value="16">16명</option><option value="24">24명</option><option value="32">32명</option></select></div>
+        <div><label>봇 난이도</label><select id="sDiff" class="field"><option value="0">쉬움</option><option value="1">보통</option><option value="2">어려움</option></select></div>
+        <div><label>경기 속도</label><select id="sSpeed" class="field"><option value="0.6">빠름 (약 7분)</option><option value="1">일반 (약 12분)</option></select></div>
+      </div>
+      <div class="row" style="margin-top:14px"><button class="btn pri" id="bStart" style="flex:1">경기 시작</button><button class="btn" id="bReady" style="flex:1">준비</button></div>
+      <div class="chat" id="lChat"></div>
+      <div class="row" style="margin-top:8px"><input id="chatIn" class="field" maxlength="80" placeholder="채팅 (Enter)"><button class="btn" id="bLeave" style="white-space:nowrap;flex:none">나가기</button></div>
+    </div>
+  </div>
+</div>
+
+<div id="hud" class="screen">
+  <div id="tags"></div>
+  <div id="zoneVig"></div>
+  <div id="dmg"></div>
+  <div id="scope"><div class="ring"></div><svg viewBox="-100 -100 200 200" id="scopeSvg"></svg></div>
+  <div id="reticle"></div>
+  <div id="compass"><div id="compassStrip"></div></div>
+  <div id="bearing" class="num">0</div>
+  <div id="minimapWrap"><canvas id="minimap" width="432" height="432"></canvas>
+    <div id="zoneInfo"><span id="zoneLbl">자기장</span><span class="t" id="zoneT">0:00</span></div>
+    <div id="zoneBar"><i id="zoneBarI"></i></div>
+    <div id="runTip"></div>
+  </div>
+  <div id="topRight"><div class="counts"><div class="cbox">생존<b id="cAlive">0</b></div><div class="cbox k">처치<b id="cKills">0</b></div></div><div id="feed"></div></div>
+  <div id="netWarn">⚠ 연결 재시도 중…</div>
+  <div id="teamList"></div>
+  <div id="cross"><i class="t"></i><i class="b"></i><i class="l"></i><i class="r"></i><i class="c"></i></div>
+  <div id="hitm"><i></i><i></i><i></i><i></i></div>
+  <div id="dirs"></div>
+  <div id="banner"></div>
+  <div id="big"></div>
+  <div id="prompt"></div>
+  <div id="prog"><span id="progL"></span><div class="bar"><i id="progI"></i></div></div>
+  <div id="toasts"></div>
+  <div id="alt"><span>고도</span><b class="num" id="altV">0</b><span id="altS"></span></div>
+  <div id="planeHint"><b>[F]</b> 키로 낙하 · 지도 <b>[M]</b> 에서 비행 경로 확인</div>
+  <div id="specInfo"></div>
+  <div id="bottom"><div id="gear"></div><div id="boost"></div><div style="position:relative"><div id="hpWrap"><div id="hpLag"></div><div id="hpFill"></div></div><div id="hpNum" class="num">100</div></div></div>
+  <div id="quick"></div>
+  <div id="weapon"><div id="slots"></div><div id="wName">맨손</div><div id="wAmmo" class="num">—</div><div id="wMode"></div></div>
+  <div id="fps" class="num" style="position:absolute;left:240px;top:20px;font-size:13px;color:#9f9;text-shadow:0 1px 2px #000;display:none"></div>
+  <div id="clickPlay"><div>클릭하여 플레이<small>ESC: 메뉴 · Tab: 인벤토리 · M: 지도</small></div></div>
+</div>
+
+<div id="inv" class="ov"><div class="ovClose">Tab / ESC 로 닫기 · 좌클릭: 줍기/사용/장착 · 우클릭: 버리기</div>
+  <div class="grid">
+    <div class="ip"><h3>주변 <span id="invNearN"></span></h3><div id="invNear"></div></div>
+    <div class="ip"><h3>가방 <span id="invCapT" class="num"></span></h3><div class="capbar"><i id="invCap"></i></div><div id="invBag"></div></div>
+    <div class="ip"><h3>장비</h3><div class="eqrow" id="invEq"></div><div id="invW"></div></div>
+  </div>
+</div>
+<div id="map" class="ov"><canvas id="bigmap" width="1600" height="1600"></canvas><div id="mapHelp">휠: 확대/축소 · 드래그: 이동 · 우클릭: 마커 (팀원에게 공유) · M / ESC 닫기</div></div>
+<div id="result" class="ov"><div class="res"><div class="rk num">#<b id="rRank">1</b></div><h1 id="rTitle">-</h1><div class="hint" id="rSub" style="margin:-10px 0 18px"></div>
+  <div class="stats"><div class="stat"><b id="rK" class="num">0</b><span>처치</span></div><div class="stat"><b id="rD" class="num">0</b><span>피해량</span></div><div class="stat"><b id="rT" class="num">0:00</b><span>생존 시간</span></div></div>
+  <div class="row" style="justify-content:center"><button class="btn" id="bSpec">관전하기</button><button class="btn pri" id="bLobby">로비로</button></div></div></div>
+<div id="pause" class="ov"><div class="box">
+  <h2 style="margin-bottom:6px">설정</h2>
+  <div class="sr">마우스 감도<input type="range" id="oSens" min="0.2" max="3" step="0.05"><span id="oSensV"></span></div>
+  <div class="sr">조준 감도 배율<input type="range" id="oAds" min="0.3" max="1.5" step="0.05"><span id="oAdsV"></span></div>
+  <div class="sr">시야각 (FOV)<input type="range" id="oFov" min="60" max="100" step="1"><span id="oFovV"></span></div>
+  <div class="sr">음량<input type="range" id="oVol" min="0" max="1" step="0.05"><span id="oVolV"></span></div>
+  <div class="sr">그래픽 품질<select id="oQ" class="field" style="max-width:240px"><option value="low">낮음 (빠름)</option><option value="med">중간 (권장)</option><option value="high">높음 (블룸·고급 그림자)</option></select></div>
+  <div class="sr">상하 반전<input type="checkbox" id="oInv"></div>
+  <div class="sr">FPS 표시<input type="checkbox" id="oFps"></div>
+  <div class="hint">그래픽 품질 변경은 새로고침 후 완전히 적용됩니다.</div>
+  <div class="row" style="margin-top:16px"><button class="btn pri" id="bResume" style="flex:1">계속하기</button><button class="btn" id="bQuit" style="flex:1">경기 나가기</button></div>
+</div></div>
+<div id="help" class="ov"><div class="box"><h2>조작법</h2>
+  <div class="keys">
+    <kbd>W A S D</kbd><span>이동 · <b>Shift</b> 달리기 · <b>Space</b> 점프 · <b>C</b> 앉기</span>
+    <kbd>마우스 좌/우</kbd><span>사격 / 조준(누르고 있기)</span>
+    <kbd>R</kbd><span>재장전 · <b>B</b> 사격 모드 변경</span>
+    <kbd>1 2 3 4 5</kbd><span>주무기1 · 주무기2 · 권총 · 맨손 · 투척무기(다시 누르면 종류 변경)</span>
+    <kbd>F</kbd><span>줍기 · 낙하 · 낙하산 펼치기 · 팀원 부활(길게)</span>
+    <kbd>Tab</kbd><span>인벤토리 (부착물 장착/해제, 아이템 버리기)</span>
+    <kbd>M</kbd><span>지도 (우클릭으로 마커) · <b>T</b> 조준 지점 마커</span>
+    <kbd>H</kbd><span>상황에 맞는 회복 · <b>7 8 9 0 -</b> 붕대·구급·메디킷·드링크·주사</span>
+    <kbd>Q / E</kbd><span>기울이기 · <b>V</b> 1인칭/3인칭 · <b>휠</b> 무기 교체</span>
+    <kbd>ESC</kbd><span>설정 / 경기 나가기</span>
+  </div>
+  <div class="hint" style="margin-top:14px">규칙: 비행기에서 뛰어내려 무기와 장비를 줍고, 줄어드는 파란 자기장 밖에 있으면 체력이 닳습니다. 마지막까지 살아남은 사람(팀)이 승리합니다.</div>
+  <button class="btn pri" id="bHelpClose" style="width:100%;margin-top:16px">확인</button></div></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
