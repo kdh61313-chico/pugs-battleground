@@ -136,13 +136,28 @@ function gearGeo(key) {
   return gearCache[key];
 }
 const gearMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.82, metalness: 0.05 });
+// Characters stay readable: a soft rim light outlines the silhouette and distance haze affects them less.
+export function applyVisibility(mat) {
+  mat.onBeforeCompile = (sh) => {
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+        float rimF = 1.0 - clamp(abs(dot(normal, normalize(vViewPosition))), 0.0, 1.0);
+        totalEmissiveRadiance += vec3(0.62, 0.66, 0.72) * pow(rimF, 3.0) * 0.38 + diffuseColor.rgb * 0.07;`)
+      .replace('#include <fog_fragment>', `#ifdef USE_FOG
+        float fogFactor2 = smoothstep( fogNear, fogFar, vFogDepth ) * 0.45;
+        gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor, fogFactor2 );
+        #endif`);
+  };
+  mat.customProgramCacheKey = () => 'vis2';
+}
+applyVisibility(gearMat);
 
 export class Character {
   constructor(opts = {}) {
     const H = humanGeometry();
     const g = H.g.clone();
     this.slot = H.slot;
-    this.col = [new THREE.Color(SKINS[(opts.skin ?? 0) % SKINS.length]), new THREE.Color(opts.shirt ?? 0x777777), new THREE.Color(opts.pants ?? 0x3a3f46), new THREE.Color(0x2b241e),
+    this.col = [new THREE.Color(SKINS[(opts.skin ?? 0) % SKINS.length]), new THREE.Color(opts.shirt ?? 0x777777), new THREE.Color(opts.pants ?? 0x56604a), new THREE.Color(0x2b241e),
       new THREE.Color(0x2a2a2a), new THREE.Color(HAIRS[(opts.hair ?? 0) % HAIRS.length]), new THREE.Color(0x26282a), new THREE.Color(0x1a1410), new THREE.Color(opts.shirt ?? 0x777777).multiplyScalar(0.65), new THREE.Color(0x2e3236)];
     const cols = new Float32Array(this.slot.length * 3);
     for (let i = 0; i < this.slot.length; i++) { const c = this.col[this.slot[i]]; cols[i * 3] = c.r; cols[i * 3 + 1] = c.g; cols[i * 3 + 2] = c.b; }
@@ -156,6 +171,7 @@ export class Character {
       else this.bones[b].position.set(...j);
     }
     this.mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.78, metalness: 0.02 });
+    applyVisibility(this.mat);
     const mesh = new THREE.SkinnedMesh(g, this.mat);
     mesh.add(this.bones.root); mesh.bind(new THREE.Skeleton(list));
     mesh.castShadow = true; mesh.receiveShadow = true; mesh.frustumCulled = false;

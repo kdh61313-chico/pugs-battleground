@@ -396,6 +396,8 @@ body.touch .menuFoot{display:none}
   <div class="sr">그래픽 품질<select id="oQ" class="field" style="max-width:240px"><option value="low">낮음 (빠름)</option><option value="med">중간 (권장)</option><option value="high">높음 (블룸·고급 그림자)</option></select></div>
   <div class="sr">상하 반전<input type="checkbox" id="oInv"></div>
   <div class="sr">FPS 표시<input type="checkbox" id="oFps"></div>
+  <div class="sr">자동 줍기 (탄약·회복·상위 장비)<input type="checkbox" id="oAuto"></div>
+  <div class="sr">조준 토글 (우클릭 한 번)<input type="checkbox" id="oAdsT"></div>
   <div class="sr">터치 시점 감도<input type="range" id="oTouch" min="0.3" max="3" step="0.05"><span id="oTouchV"></span></div>
   <div class="hint">그래픽 품질 변경은 새로고침 후 완전히 적용됩니다.</div>
   <div class="row" style="margin-top:16px"><button class="btn pri" id="bResume" style="flex:1">계속하기</button><button class="btn" id="bQuit" style="flex:1">경기 나가기</button></div>
@@ -406,7 +408,8 @@ body.touch .menuFoot{display:none}
     <kbd>마우스 좌/우</kbd><span>사격 / 조준(누르고 있기)</span>
     <kbd>R</kbd><span>재장전 · <b>B</b> 사격 모드 변경</span>
     <kbd>1 2 3 4 5</kbd><span>주무기1 · 주무기2 · 권총 · 맨손 · 투척무기(다시 누르면 종류 변경)</span>
-    <kbd>F</kbd><span>줍기 · 낙하 · 낙하산 펼치기 · 팀원 부활(길게)</span>
+    <kbd>F</kbd><span>줍기 · 낙하 · 낙하산 펼치기 · 팀원 부활(길게) · <b>Shift+F</b> 주변 모두 줍기</span>
+    <kbd>=</kbd><span>자동 달리기 (W/S로 해제) · 탄약·회복·상위 장비는 자동 줍기 (설정에서 끄기)</span>
     <kbd>Tab</kbd><span>인벤토리 (부착물 장착/해제, 아이템 버리기)</span>
     <kbd>M</kbd><span>지도 (우클릭으로 마커) · <b>T</b> 조준 지점 마커</span>
     <kbd>H</kbd><span>상황에 맞는 회복 · <b>7 8 9 0 -</b> 붕대·구급·메디킷·드링크·주사</span>

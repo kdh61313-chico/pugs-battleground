@@ -24,6 +24,7 @@ export class Hud {
     this.tags = {}; this.lastInvRefresh = 0;
     $('slots').addEventListener('pointerdown', (e) => { const el = e.target.closest('.slot'); if (!el || this.screen !== 'game') return; e.stopPropagation(); const i = +el.dataset.i; if (i === 3 && this.g.me.held === 3) { this.g.input.pressed.add('Digit5'); } else this.g.equip(i); });
     for (const id of ['inv', 'map']) { const b = document.createElement('button'); b.className = 'btn ovX'; b.textContent = '닫기 ✕'; b.onclick = () => (id === 'inv' ? this.toggleInventory(false) : this.toggleMap(false)); $(id).appendChild(b); }
+    { const b = document.createElement('button'); b.className = 'btn ovX'; b.id = 'bPickAll'; b.style.left = '108px'; b.textContent = '주변 모두 줍기'; b.onclick = () => { const G = this.g; if (G && G.me && G.me.st === 'ground') G.pickupAll(); }; $('inv').appendChild(b); }
   }
   // ---------- screens ----------
   showScreen(name) {
@@ -143,6 +144,8 @@ export class Hud {
     if (S.touchSens == null) S.touchSens = 1; bindR('oTouch', 'touchSens', (v) => v.toFixed(2));
     $('oQ').value = S.quality; $('oQ').onchange = (e) => { S.quality = e.target.value; g.saveSettings(); g.app.applyQuality(); };
     $('oInv').checked = !!S.invertY; $('oInv').onchange = (e) => { S.invertY = e.target.checked; g.saveSettings(); };
+    $('oAuto').checked = S.autoPick !== false; $('oAuto').onchange = (e) => { S.autoPick = e.target.checked; g.saveSettings(); };
+    $('oAdsT').checked = !!S.adsToggle; $('oAdsT').onchange = (e) => { S.adsToggle = e.target.checked; g.saveSettings(); };
     $('oFps').checked = !!S.showFps; $('oFps').onchange = (e) => { S.showFps = e.target.checked; g.saveSettings(); $('fps').style.display = S.showFps ? 'block' : 'none'; };
     $('bSpec').onclick = () => { $('result').classList.remove('on'); this.requestLock(); };
     $('bLobby').onclick = () => g.app.resultLobby();

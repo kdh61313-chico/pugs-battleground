@@ -81,6 +81,17 @@ export class Audio {
     }
     setTimeout(() => { try { send.disconnect(); } catch (e) {} }, (t - c.currentTime + 3) * 1000);
   }
+  glass(pos) {
+    if (!this.ctx) return;
+    const [g0, pan, d] = this.spatial(pos.x, pos.y, pos.z); if (d > 120) return;
+    const c = this.ctx, o = this.out(pan);
+    for (let k = 0; k < 7; k++) {
+      const t = c.currentTime + k * 0.025 + Math.random() * 0.03;
+      const n = this.noiseSrc(); const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 3000 + Math.random() * 5000; f.Q.value = 6;
+      const g = c.createGain(); g.gain.setValueAtTime(g0 * (k ? 0.35 : 0.8), t); g.gain.exponentialRampToValueAtTime(0.0005, t + 0.08 + Math.random() * 0.15);
+      n.connect(f); f.connect(g); g.connect(o); n.start(t, Math.random()); n.stop(t + 0.3);
+    }
+  }
   explosion(pos) {
     if (!this.ctx) return;
     const [g0, pan, d] = this.spatial(pos.x, pos.y, pos.z); const c = this.ctx, t = c.currentTime; const o = this.out(pan);

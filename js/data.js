@@ -128,7 +128,7 @@ export const ROADS = [
   ['quarry', 'cape'], ['quarry', 'harbor'], ['farm', 'harbor'], ['hill', 'lodge'],
 ];
 
-export const PLAYER_COLORS = [0xd9483b, 0x3b7bd9, 0x3bbf6a, 0xe0b23a, 0x9b59d9, 0xe0743a, 0x3bc7c7, 0xd94a9b];
+export const PLAYER_COLORS = [0xe8503f, 0x3f86f0, 0x3fd472, 0xf2c33c, 0xa862f0, 0xf2803c, 0x3fd9d9, 0xf04fa8];
 export const TEAM_COLORS = ['#ffcf3f', '#4fc3ff', '#6dff8a', '#ff7ad9'];
 
 const BN1 = ['그림자', '야간', '번개', '강철', '푸른', '붉은', '은빛', '조용한', '빠른', '고독한', '날쌘', '차가운', '잿빛', '흰', '검은', '용감한'];

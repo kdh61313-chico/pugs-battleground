@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { GAME_VER, WEAPONS, AMMO, ATTACH, ITEMS, itemInfo, botName, PLAYER_COLORS } from './data.js';
 import { Actor, ST, STI, WIDS } from './actor.js';
 import { makePlane, planePos, makeZones, zoneAt, makeLoot, makeCare } from './match.js';
-import { itemModel, crateModel, careChuteModel, planeModel } from './models.js';
+import { itemModel, crateModel, careChuteModel, planeModel, weaponModel } from './models.js';
 import { clamp, lerp, mulberry32 } from './util.js';
 import { LocalNet } from './net.js';
 import { glintMaterial } from './effects.js';
@@ -188,7 +188,7 @@ export class Game {
       const e = b[i]; if (!Array.isArray(e)) continue;
       const id = 'b' + i;
       let a = this.actors.get(id);
-      if (!a) { a = new Actor(id, { isBot: true, name: botName(this.match.seed, i), team: id, colorIdx: (i * 3 + 1) % 8, skin: i % 5, hair: i % 4, pants: [0x3a3f46, 0x4a4030, 0x2e3a2e][i % 3] }); this.addActor(a); }
+      if (!a) { a = new Actor(id, { isBot: true, name: botName(this.match.seed, i), team: id, colorIdx: (i * 3 + 1) % 8, skin: i % 5, hair: i % 4, pants: [0x56604a, 0x6a5c44, 0x4e5a68][i % 3] }); this.addActor(a); }
       a.pushSnap({ t: now, x: e[0] / 10, y: e[1] / 10, z: e[2] / 10, yaw: e[3] / 100, pitch: e[4] / 100, st: ST[e[5]] || 'ground' });
       a.hp = e[6]; a.w = WIDS[e[7] - 1] || null; const sq = e[8] | 0;
       if (a.sq >= 0 && sq > a.sq) a.pendingShots = Math.min(6, a.pendingShots + (sq - a.sq));
@@ -223,6 +223,7 @@ export class Game {
       case 'cr': this.addCrate({ id: String(e[2]), x: +e[3], y: +e[4], z: +e[5], kind: e[6], items: (e[7] || []).map((it) => ({ type: it[0], qty: it[1] | 0, taken: false })), owner: e[8] }); break;
       case 'gr': this.spawnGrenade(e[2], +e[3], +e[4], +e[5], +e[6], +e[7], +e[8], +e[9], peer); break;
       case 'rv': if (e[2] === this.myPeer) this.gotRevived(peer); break;
+      case 'gb': this.shatterGlass(e[2] | 0, false); break;
       case 'ch': { const a = this.lobbyPeers().find((x) => x.peer === peer); this.addChat(a ? a.name : '???', String(e[2]).slice(0, 80)); break; }
     }
   }
@@ -278,6 +279,18 @@ export class Game {
   sendNow() { if (this.net) this.net.send(this.buildPresence()); this.sendT = 0; }
 
   // ===================== match lifecycle =====================
+  // compile every shader now (incl. hidden effect/weapon meshes) so the first explosion, first glass break
+  // or first gun swap doesn't freeze a frame mid-fight
+  prewarm() {
+    try {
+      const hidden = []; this.scene.traverse((o) => { if (!o.visible) { hidden.push(o); o.visible = true; } });
+      if (!this._warmGuns) { this._warmGuns = new THREE.Group(); for (const id of Object.keys(WEAPONS)) { const m = weaponModel(id, { s: 's_4x', m: 'm_supp', g: null, x: null }); m.position.set(0, -1000, 0); this._warmGuns.add(m); } }
+      this.scene.add(this._warmGuns);
+      this.renderer.compile(this.scene, this.camera);
+      this.scene.remove(this._warmGuns);
+      for (const o of hidden) o.visible = false;
+    } catch (e) { console.warn('prewarm', e); }
+  }
   beginMatch(g, spectator) {
     this.endLocalMatch();
     const W = this.world;
@@ -292,6 +305,7 @@ export class Game {
     if (this.isHost) this.bots.create(m.nb, m.seed);
     this.mode = 'match';
     this.plane.visible = true;
+    this.prewarm();
     this.hud.showScreen('game');
     this.hud.onMatchStart();
     this.audio.ui('warn');
@@ -404,6 +418,7 @@ export class Game {
     const id = this.newItemId();
     const gy = this.world.groundAt(x, z, y + 0.4);
     this.addItem({ id, type, qty, x, y: gy + 0.02, z });
+    if (this.me) (this.me.autoSkip || (this.me.autoSkip = new Set())).add(id); // never auto-grab what we just dropped
     this.emit('dr', id, type, qty, Math.round(x * 100) / 100, Math.round((gy + 0.02) * 100) / 100, Math.round(z * 100) / 100);
   }
   dropCrate(items, x, y, z, owner) {
@@ -447,8 +462,9 @@ export class Game {
         g.v.y -= 9.8 * dt;
         const sp = g.v.length(); const step = sp * dt;
         if (step > 1e-4) {
-          const h = this.world.raycast(g.p.x, g.p.y, g.p.z, g.v.x / sp, g.v.y / sp, g.v.z / sp, step + 0.06, true);
-          if (h) {
+          const h = this.world.raycast(g.p.x, g.p.y, g.p.z, g.v.x / sp, g.v.y / sp, g.v.z / sp, step + 0.06, true, 1);
+          if (h && h.kind === 'glass') { this.shatterGlass(h.pane, false); g.p.addScaledVector(g.v, dt); g.v.multiplyScalar(0.8); }
+          else if (h) {
             g.p.addScaledVector(g.v, (h.t - 0.05) / sp);
             const n = _v.set(h.nx, h.ny, h.nz); const vn = g.v.dot(n);
             g.v.addScaledVector(n, -1.55 * vn).multiplyScalar(0.55);
@@ -466,6 +482,7 @@ export class Game {
   }
   explode(x, y, z, owner) {
     this.fx.explosion(x, y, z); this.audio.explosion({ x, y, z });
+    const P = this.world.glassPanes; for (let i = 0; i < P.length; i++) { const a = P[i]; const cx = (a[0] + a[3]) / 2, cy = (a[1] + a[4]) / 2, cz = (a[2] + a[5]) / 2; if ((cx - x) ** 2 + (cy - y) ** 2 + (cz - z) ** 2 < 49) this.shatterGlass(i, false); }
     const R = 9, me = this.me;
     const dmgAt = (px, py, pz) => {
       const d = Math.hypot(px - x, py - y, pz - z); if (d > R) return 0;
@@ -478,6 +495,14 @@ export class Game {
       const dd = Math.hypot(me.pos.x - x, me.pos.z - z); if (dd < 30) this.shake = Math.max(this.shake || 0, 1 - dd / 30);
     }
     if (this.isHost) this.bots.explosion(x, y, z, owner, dmgAt);
+  }
+
+  // ===================== glass =====================
+  shatterGlass(id, broadcast) {
+    if (!this.world.breakGlass(id)) return;
+    const c = this.world.glassCenter(id);
+    this.fx.glass(c.x, c.y, c.z); this.audio.glass(c);
+    if (broadcast) this.emit('gb', id);
   }
 
   // ===================== bullets =====================
@@ -505,8 +530,14 @@ export class Game {
           const r = a.hitTest(b.p.x, b.p.y, b.p.z, ex, ey, ez);
           if (r && (!best || r.t < best.t)) best = { ...r, a };
         }
-        const wh = W.raycast(b.p.x, b.p.y, b.p.z, dx, dy, dz, len, true);
+        const wh = W.raycast(b.p.x, b.p.y, b.p.z, dx, dy, dz, len, true, 1);
         const wt = wh ? wh.t / len : 2;
+        if (wh && wh.kind === 'glass' && !(best && best.t < wt)) {
+          // bullet shatters the pane and keeps flying
+          this.shatterGlass(wh.pane, true);
+          b.p.set(b.p.x + dx * (wh.t + 0.08), b.p.y + dy * (wh.t + 0.08), b.p.z + dz * (wh.t + 0.08)); b.d += wh.t;
+          continue;
+        }
         if (best && best.t < wt) {
           const hx = b.p.x + dx * len * best.t, hy = b.p.y + dy * len * best.t, hz = b.p.z + dz * len * best.t;
           this.onBulletHit(b, best.a, best.part, hx, hy, hz);

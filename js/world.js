@@ -86,7 +86,7 @@ export class World {
     this.noise = makeNoise(MAP_SEED);
     this.H = new Float32Array(N * N);
     this.boxes = []; // flat array, 6 per box
-    this.lootPoints = [];
+    this.lootPoints = []; this.glassPanes = [];
     this.towns = TOWNS.map((t) => ({ ...t }));
     this.roads = [];
     this.footprints = [];
@@ -166,6 +166,7 @@ export class World {
     progress(0.85, '충돌 데이터 정리 중');
     await tick();
     this.finalizeCollision();
+    this.buildGlass();
     this.buildMapCanvas();
     this.buildGrass();
     progress(1, '완료');
@@ -201,13 +202,37 @@ export class World {
   }
 
   // ---------- collision boxes ----------
-  addCol(b) { this.boxes.push(b[0], b[1], b[2], b[3], b[4], b[5]); }
+  addCol(b, glass = -1) { this.boxes.push(b[0], b[1], b[2], b[3], b[4], b[5]); (this.boxGlassL || (this.boxGlassL = [])).push(glass); }
+  // ---------- breakable glass ----------
+  addGlass(a) { // a = world AABB of a pane
+    const id = this.glassPanes.length; this.glassPanes.push(a); this.addCol(a, id); return id;
+  }
+  buildGlass() {
+    const n = this.glassPanes.length; this.glassBroken = new Uint8Array(n);
+    if (!n) return;
+    const mat = new THREE.MeshStandardMaterial({ color: 0x9fc4d8, transparent: true, opacity: 0.34, roughness: 0.05, metalness: 0.5, depthWrite: false });
+    const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat, n);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion();
+    this.glassPanes.forEach((a, i) => { m4.compose(new THREE.Vector3((a[0] + a[3]) / 2, (a[1] + a[4]) / 2, (a[2] + a[5]) / 2), q, new THREE.Vector3(a[3] - a[0], a[4] - a[1], a[5] - a[2])); im.setMatrixAt(i, m4); });
+    im.instanceMatrix.needsUpdate = true; im.renderOrder = 3;
+    this.scene.add(im); this.glassMesh = im;
+  }
+  isGlassBox(i) { return this.boxGlass && this.boxGlass[i] >= 0; }
+  glassBlocks(i) { const g = this.boxGlass[i]; return g < 0 || !this.glassBroken[g]; }
+  breakGlass(id) {
+    if (id < 0 || !this.glassBroken || this.glassBroken[id]) return false;
+    this.glassBroken[id] = 1;
+    if (this.glassMesh) { this.glassMesh.setMatrixAt(id, new THREE.Matrix4().makeScale(0, 0, 0)); this.glassMesh.instanceMatrix.needsUpdate = true; }
+    return true;
+  }
+  glassCenter(id) { const a = this.glassPanes[id]; return { x: (a[0] + a[3]) / 2, y: (a[1] + a[4]) / 2, z: (a[2] + a[5]) / 2 }; }
 
   finalizeCollision() {
     const B = (this.boxArr = new Float32Array(this.boxes));
     const nb = B.length / 6;
     this.nBoxes = nb;
     this.stamp = new Uint32Array(nb); this.stampId = 1;
+    this.boxGlass = Int32Array.from(this.boxGlassL); this.boxGlassL = null;
     const cells = new Array(GN * GN);
     for (let i = 0; i < nb; i++) {
       const o = i * 6;
@@ -236,6 +261,7 @@ export class World {
     const B = this.boxArr;
     this.forBoxes(x - r, z - r, x + r, z + r, (o) => {
       if (x + r * 0.6 < B[o] || x - r * 0.6 > B[o + 3] || z + r * 0.6 < B[o + 2] || z - r * 0.6 > B[o + 5]) return;
+      if (this.boxGlass[o / 6] >= 0) return;
       const top = B[o + 4];
       if (top <= footY + STEP && top > g) g = top;
     });
@@ -248,6 +274,7 @@ export class World {
       let moved = false;
       this.forBoxes(p.x - r, p.z - r, p.x + r, p.z + r, (o) => {
         if (B[o + 4] <= p.y + STEP || B[o + 1] >= p.y + height) return;
+        if (!this.glassBlocks(o / 6)) return;
         const cx = clamp(p.x, B[o], B[o + 3]), cz = clamp(p.z, B[o + 2], B[o + 5]);
         let dx = p.x - cx, dz = p.z - cz;
         const d2 = dx * dx + dz * dz;
@@ -270,14 +297,15 @@ export class World {
     let c = Infinity; const B = this.boxArr;
     this.forBoxes(x - r, z - r, x + r, z + r, (o) => {
       if (x < B[o] || x > B[o + 3] || z < B[o + 2] || z > B[o + 5]) return;
+      if (this.boxGlass[o / 6] >= 0) return;
       if (B[o + 1] >= y && B[o + 1] < c) c = B[o + 1];
     });
     return c;
   }
 
   // Ray: returns {t, kind, nx,ny,nz} or null
-  raycast(ox, oy, oz, dx, dy, dz, maxD, terrain = true) {
-    let best = maxD, kind = null, nx = 0, ny = 0, nz = 0;
+  raycast(ox, oy, oz, dx, dy, dz, maxD, terrain = true, glass = 0) {
+    let best = maxD, kind = null, nx = 0, ny = 0, nz = 0, pane = -1;
     // boxes via 2D DDA
     const B = this.boxArr;
     const sid = ++this.stampId; const st = this.stamp;
@@ -294,6 +322,8 @@ export class World {
         const c = this.cells[gz * GN + gx];
         if (c) for (let k = 0; k < c.length; k++) {
           const i = c[k]; if (st[i] === sid) continue; st[i] = sid;
+          const gi = this.boxGlass[i];
+          if (gi >= 0 && (!glass || this.glassBroken[gi])) continue;
           const o = i * 6;
           let t1 = (B[o] - ox) * idx, t2 = (B[o + 3] - ox) * idx;
           let tmin = Math.min(t1, t2), tmax = Math.max(t1, t2), ax = 0;
@@ -304,7 +334,7 @@ export class World {
           a = Math.min(t1, t2); b = Math.max(t1, t2);
           if (a > tmin) { tmin = a; ax = 2; } if (b < tmax) tmax = b;
           if (tmax >= Math.max(tmin, 0) && tmin < best && tmin >= 0) {
-            best = tmin; kind = 'box';
+            best = tmin; kind = gi >= 0 ? 'glass' : 'box'; pane = gi;
             nx = ax === 0 ? -Math.sign(dx) : 0; ny = ax === 1 ? -Math.sign(dy) : 0; nz = ax === 2 ? -Math.sign(dz) : 0;
           }
         }
@@ -339,7 +369,7 @@ export class World {
       }
     }
     if (!kind) return null;
-    return { t: best, kind, nx, ny, nz };
+    return { t: best, kind, nx, ny, nz, pane: kind === 'glass' ? pane : -1 };
   }
   los(ax, ay, az, bx, by, bz) {
     const dx = bx - ax, dy = by - ay, dz = bz - az; const d = Math.hypot(dx, dy, dz);
@@ -479,10 +509,9 @@ export class World {
           const mid = (o[0] + o[1]) / 2; fr(mid - 0.025, o[2], mid + 0.025, o[3]); }
         this.M(prev);
       }
-      if (o[4]) { // glass pane
-        const gc = C(0x9fc4d8);
-        if (axis === 'x') this.lbox(f, o[0], y0 + o[2], c - 0.03, o[1], y0 + o[3], c + 0.03, gc, false, true);
-        else this.lbox(f, c - 0.03, y0 + o[2], o[0], c + 0.03, y0 + o[3], o[1], gc, false, true);
+      if (o[4]) { // breakable glass pane (blocks bullets & people until broken)
+        if (axis === 'x') this.addGlass(f.aabb(o[0], y0 + o[2], c - 0.03, o[1], y0 + o[3], c + 0.03));
+        else this.addGlass(f.aabb(c - 0.03, y0 + o[2], o[0], c + 0.03, y0 + o[3], o[1]));
       }
       cur = o[1];
     }
@@ -551,7 +580,7 @@ export class World {
       const pz = (o.nPart && d > 15) ? -hd * 0.1 : -hd + d * 0.42;
       if (laneB[0] - 0.3 > px + 0.2) this.wall(f, 'x', px + 0.08, laneB[0] - 0.3, pz, 0.15, y0, fh - 0.01, [[(px + laneB[0]) / 2 - 0.5, (px + laneB[0]) / 2 + 0.5, 0, 2.2]], trim);
       // stairs flight fl -> fl+1
-      if (fl < floors - 1) {
+      if (fl < floors - 1 || (fl === floors - 1 && !gable)) { // last flight leads onto the flat roof
         this.M(3);
         const even = fl % 2 === 0; const lane = even ? laneA : laneB;
         for (let s = 0; s < 10; s++) {
@@ -562,11 +591,25 @@ export class World {
       }
       // furniture & loot
       this.M(0);
-      this.furnish(f, -hw + t, -hd + t, hw - t, hd - t, y0, rng, floors > 1 ? stairZone : null, px);
+      this.furnish(f, -hw + t, -hd + t, hw - t, hd - t, y0, rng, floors > 1 || !gable ? stairZone : null, px);
     }
     const yTop = ground + floors * fh;
     this.M(gable ? 1 : 9);
-    this.lbox(f, -hw - 0.2, yTop - 0.02, -hd - 0.2, hw + 0.2, yTop + 0.25, hd + 0.2, gable ? trim : C(0x77736c));
+    if (gable) this.lbox(f, -hw - 0.2, yTop - 0.02, -hd - 0.2, hw + 0.2, yTop + 0.25, hd + 0.2, trim);
+    else {
+      // flat roof with a stairwell opening above the last flight + safety rail around it
+      const lane = (floors - 1) % 2 === 0 ? laneA : laneB, even = (floors - 1) % 2 === 0;
+      const hx0 = lane[0] - 0.05, hx1 = lane[1] + 0.05, hz0 = zS - 0.15, hz1 = zS + run + 0.1;
+      this.slab(f, -hw - 0.2, -hd - 0.2, hw + 0.2, hd + 0.2, yTop - 0.02, yTop + 0.25, C(0x77736c), [hx0, hz0, hx1, hz1]);
+      const rc = C(0x55595e), ry = yTop + 0.25;
+      this.M(0);
+      if (hx0 > -hw + 0.3) this.lbox(f, hx0 - 0.06, ry, hz0, hx0, ry + 1.0, hz1, rc);
+      this.lbox(f, hx0 - 0.06, ry, even ? hz0 - 0.06 : hz1, hx1, ry + 1.0, even ? hz0 : hz1 + 0.06, rc);
+      // little roof-access hut roof over the opening so it reads as a stairwell
+      this.lbox(f, hx0 - 0.1, ry + 2.3, hz0 - 0.1, hx1 + 0.1, ry + 2.42, hz1 + 0.1, C(0x5a5f66), false);
+      for (const [px2, pz2] of [[hx0 - 0.06, hz0 - 0.06], [hx0 - 0.06, hz1], [hx1 - 0.02, hz0 - 0.06], [hx1 - 0.02, hz1]]) this.lbox(f, px2, ry, pz2, px2 + 0.08, ry + 2.3, pz2 + 0.08, rc);
+      this.M(9);
+    }
     if (o.parapet || !gable) {
       const pc = trim; this.M(3);
       this.lbox(f, -hw - 0.2, yTop + 0.25, -hd - 0.2, hw + 0.2, yTop + 0.8, -hd + 0.05, pc);
@@ -668,6 +711,15 @@ export class World {
       this.lbox(f, -hw - 0.3, y0 + h, -hd - 0.3, hw + 0.3, y0 + h + 0.3, hd + 0.3, C(0x6a6e72));
       // corrugated ribs
       for (let z = -hd; z < hd; z += 2) this.lbox(f, -hw - 0.3, y0 + h + 0.3, z, hw + 0.3, y0 + h + 0.38, z + 0.3, C(0x5a5e62), false);
+    }
+    if (!o.barn) { // outside staircase along the left wall up to the roof
+      this.M(3); const top = y0 + h + 0.3, nS = Math.ceil(top / 0.31), rise = top / nS, zs0 = -hd + 1.5;
+      for (let i = 0; i < nS; i++) { const za = zs0 + i * 0.31; this.lbox(f, -hw - 1.5, Math.max(f.ymin - f.y - 0.5, rise * i - 0.5), za, -hw - 0.3, rise * (i + 1), za + 0.31, C(0x6e6a64)); }
+      const ze = zs0 + nS * 0.31;
+      this.lbox(f, -hw - 1.5, top - 0.3, ze, -hw - 0.3, top, ze + 1.4, C(0x6e6a64)); // landing next to the roof edge
+      const rc = C(0x4a4f55); this.M(0);
+      for (let i = 0; i < nS; i++) { const za = zs0 + i * 0.31; this.lbox(f, -hw - 1.56, rise * (i + 1) + 0.92, za, -hw - 1.5, rise * (i + 1) + 1.0, za + 0.31, rc, false); if (i % 4 === 0) this.lbox(f, -hw - 1.56, rise * (i + 1), za, -hw - 1.5, rise * (i + 1) + 0.95, za + 0.05, rc, false); }
+      this.lbox(f, -hw - 1.56, top, ze, -hw - 1.5, top + 1.0, ze + 1.4, rc); // landing rail
     }
     // interior: crate stacks + catwalk
     this.M(0);
@@ -1195,31 +1247,48 @@ export class World {
     im.frustumCulled = false; im.receiveShadow = true;
     this.scene.add(im); this.grass = im; this.grassCount = COUNT; this.grassCenter = [1e9, 1e9];
   }
+  // Grass around the camera is rebuilt as you move. The rebuild is spread over several frames
+  // (it used to run in one go and caused a visible hitch every ~8 m while running).
   updateGrass(cx, cz) {
     if (!this.grass) return;
+    if (this.grassJob) { this.grassJob.next(); return; }
     if (Math.hypot(cx - this.grassCenter[0], cz - this.grassCenter[1]) < 8) return;
-    this.grassCenter = [cx, cz];
-    const R = 46, m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), col = new THREE.Color();
-    let n = 0; const CELLG = 0.62;
+    this.grassJob = this.grassBuild(cx, cz); this.grassJob.next();
+  }
+  *grassBuild(cx, cz) {
+    const R = 46, CELLG = 0.62; const N = this.grassCount;
+    const mats = this.grassStageM || (this.grassStageM = new Float32Array(N * 16));
+    const cols = this.grassStageC || (this.grassStageC = new Float32Array(N * 3));
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+    let n = 0, work = 0;
     const x0 = Math.floor((cx - R) / CELLG), x1 = Math.floor((cx + R) / CELLG), z0 = Math.floor((cz - R) / CELLG), z1 = Math.floor((cz + R) / CELLG);
-    for (let gz = z0; gz <= z1 && n < this.grassCount; gz++) for (let gx = x0; gx <= x1 && n < this.grassCount; gx++) {
-      let hsh = (gx * 73856093) ^ (gz * 19349663); hsh = Math.imul(hsh ^ (hsh >>> 13), 0x5bd1e995); const r1 = ((hsh >>> 0) % 1000) / 1000;
-      if (r1 > 0.42) continue;
-      const x = (gx + ((hsh >>> 10) % 100) / 100) * CELLG, z = (gz + ((hsh >>> 17) % 100) / 100) * CELLG;
-      const dd = Math.hypot(x - cx, z - cz); if (dd > R) continue;
-      if (dd > R * 0.6 && r1 > 0.42 * (1 - (dd - R * 0.6) / (R * 0.4))) continue;
-      const gc = this.groundColorAt(x, z);
-      if (!(gc[1] > gc[0] * 1.05 && gc[1] > gc[2] * 1.3)) continue;
-      const h = this.heightAt(x, z);
-      if (h < 2) continue;
-      p.set(x, h - 0.03, z); q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), r1 * 40);
-      const sc = 0.55 + ((hsh >>> 5) % 100) / 100 * 0.7; s.set(sc, sc * (0.7 + r1), sc);
-      m4.compose(p, q, s); this.grass.setMatrixAt(n, m4);
-      col.setRGB(gc[0] / 175, gc[1] / 165, gc[2] / 140); this.grass.setColorAt(n, col);
-      n++;
+    for (let gz = z0; gz <= z1 && n < N; gz++) {
+      for (let gx = x0; gx <= x1 && n < N; gx++) {
+        let hsh = (gx * 73856093) ^ (gz * 19349663); hsh = Math.imul(hsh ^ (hsh >>> 13), 0x5bd1e995); const r1 = ((hsh >>> 0) % 1000) / 1000;
+        if (r1 > 0.42) continue;
+        const x = (gx + ((hsh >>> 10) % 100) / 100) * CELLG, z = (gz + ((hsh >>> 17) % 100) / 100) * CELLG;
+        const dd = Math.hypot(x - cx, z - cz); if (dd > R) continue;
+        if (dd > R * 0.6 && r1 > 0.42 * (1 - (dd - R * 0.6) / (R * 0.4))) continue;
+        const gc = this.groundColorAt(x, z);
+        if (!(gc[1] > gc[0] * 1.05 && gc[1] > gc[2] * 1.3)) continue;
+        const h = this.heightAt(x, z);
+        if (h < 2) continue;
+        p.set(x, h - 0.03, z); q.setFromAxisAngle(up, r1 * 40);
+        const sc = 0.55 + ((hsh >>> 5) % 100) / 100 * 0.7; s.set(sc, sc * (0.7 + r1), sc);
+        m4.compose(p, q, s); m4.toArray(mats, n * 16);
+        cols[n * 3] = gc[0] / 175; cols[n * 3 + 1] = gc[1] / 165; cols[n * 3 + 2] = gc[2] / 140;
+        n++;
+      }
+      if (++work % 14 === 0) yield; // ~14 rows of cells per frame
     }
+    // swap in one go
+    this.grass.instanceMatrix.array.set(mats.subarray(0, n * 16));
+    if (!this.grass.instanceColor) this.grass.setColorAt(0, new THREE.Color(1, 1, 1));
+    this.grass.instanceColor.array.set(cols.subarray(0, n * 3));
     this.grass.count = n;
-    this.grass.instanceMatrix.needsUpdate = true; if (this.grass.instanceColor) this.grass.instanceColor.needsUpdate = true;
+    this.grass.instanceMatrix.needsUpdate = true; this.grass.instanceColor.needsUpdate = true;
+    this.grassCenter = [cx, cz];
+    this.grassJob = null;
   }
 
   buildMapCanvas() {

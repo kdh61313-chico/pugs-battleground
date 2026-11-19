@@ -77,8 +77,8 @@ let dynScale = 1, slowSec = 0, fastSec = 0;
 function adaptRes(fps) {
   if (document.hidden || fps < 15) return; // <15 usually means the page is throttled in the background, not GPU-bound
   if (fps < 42) { slowSec++; fastSec = 0; } else if (fps > 57) { fastSec++; slowSec = 0; } else { slowSec = 0; fastSec = 0; }
-  if (slowSec >= 2 && dynScale > 0.55) { dynScale = Math.max(0.55, dynScale - 0.12); slowSec = 0; applyQuality(true); }
-  if (fastSec >= 6 && dynScale < 1) { dynScale = Math.min(1, dynScale + 0.08); fastSec = 0; applyQuality(true); }
+  if (slowSec >= 4 && dynScale > 0.6) { dynScale = Math.max(0.6, dynScale - 0.15); slowSec = 0; applyQuality(true); }
+  if (fastSec >= 12 && dynScale < 1) { dynScale = Math.min(1, dynScale + 0.1); fastSec = 0; applyQuality(true); }
 }
 function applyQuality(keepComposer) {
   const q = settings.quality;
@@ -143,7 +143,7 @@ app.applyQuality = applyQuality;
 
 // ---------- input ----------
 const inp = game.input;
-const GAME_KEYS = new Set(['Tab', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyM', 'KeyC', 'ControlLeft', 'ShiftLeft', 'KeyQ', 'KeyE', 'KeyR', 'KeyB', 'KeyG', 'KeyH', 'KeyT', 'KeyV', 'KeyX']);
+const GAME_KEYS = new Set(['Tab', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyM', 'KeyC', 'ControlLeft', 'ShiftLeft', 'KeyQ', 'KeyE', 'KeyR', 'KeyB', 'KeyG', 'KeyH', 'KeyT', 'KeyV', 'KeyX', 'KeyY', 'Equal']);
 addEventListener('keydown', (e) => {
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
   if (hud.screen === 'game' && (GAME_KEYS.has(e.code) || e.code.startsWith('Digit'))) e.preventDefault();
@@ -162,14 +162,25 @@ addEventListener('mousedown', (e) => {
   if (TOUCH && hud.touchMode && (e.sourceCapabilities ? e.sourceCapabilities.firesTouchEvents : false)) return;
   if (hud.screen !== 'game' || !hud.captured() || hud.anyOverlay()) return;
   if (e.button === 0) { inp.mouseL = true; inp.mouseLPressed = true; }
-  if (e.button === 2) inp.mouseR = true;
+  if (e.button === 2) { inp.mouseR = true; inp.mouseRPress = true; }
 });
 addEventListener('mouseup', (e) => { if (e.button === 0) inp.mouseL = false; if (e.button === 2) inp.mouseR = false; });
-addEventListener('mousemove', (e) => { if (hud.screen === 'game' && hud.captured() && !hud.anyOverlay()) { inp.dx += e.movementX || 0; inp.dy += e.movementY || 0; } });
+// Mouse look with spike filtering: Chrome's pointer lock occasionally reports huge bogus movement
+// (right after (re)locking, alt-tab, or on some high-polling mice) which made the view "snap around".
+const mv = { avg: 8, lockT: 0 };
+addEventListener('mousemove', (e) => {
+  if (!(hud.screen === 'game' && hud.captured() && !hud.anyOverlay())) return;
+  const mx = e.movementX || 0, my = e.movementY || 0;
+  if (performance.now() - mv.lockT < 150) return; // first events after locking are unreliable
+  const m = Math.max(Math.abs(mx), Math.abs(my));
+  if (m > 400 || (m > 140 && m > mv.avg * 9)) return; // isolated spike -> ignore
+  mv.avg = mv.avg * 0.9 + m * 0.1;
+  inp.dx += mx; inp.dy += my;
+});
 addEventListener('wheel', (e) => { if (hud.screen === 'game' && hud.captured() && !hud.anyOverlay()) inp.wheel = Math.sign(e.deltaY); }, { passive: true });
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 document.getElementById('hud').addEventListener('contextmenu', (e) => e.preventDefault());
-document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement) hud.fakeLock = false; hud.onLockChange(); });
+document.addEventListener('pointerlockchange', () => { if (document.pointerLockElement) { hud.fakeLock = false; mv.lockT = performance.now(); inp.dx = inp.dy = 0; } hud.onLockChange(); });
 addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); applyQuality(true); hud.fitMap(); });
 
 // ---------- loop ----------

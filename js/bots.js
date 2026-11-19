@@ -19,7 +19,7 @@ export class BotManager {
     const diff = game.match.df; // 0 easy 1 normal 2 hard
     for (let i = 0; i < n; i++) {
       const id = 'b' + i;
-      const a = new Actor(id, { isBot: true, name: botName(seed, i), team: id, colorIdx: (i * 3 + 1) % 8, skin: i % 5, hair: i % 4, pants: [0x3a3f46, 0x4a4030, 0x2e3a2e][i % 3] });
+      const a = new Actor(id, { isBot: true, name: botName(seed, i), team: id, colorIdx: (i * 3 + 1) % 8, skin: i % 5, hair: i % 4, pants: [0x56604a, 0x6a5c44, 0x4e5a68][i % 3] });
       a.st = 'plane'; a.hp = 100; a.sq = 0;
       let jt = rand(rng, 3, P.dur - 3);
       for (let k = 0; k < 30; k++) { const pp = planePos(P, jt); if (game.world.heightAt(pp[0], pp[2]) > 3) break; jt = rand(rng, 3, P.dur - 3); }
@@ -217,6 +217,10 @@ export class BotManager {
   fire(a, t, d, def, dt) {
     const g = this.g, B = a.brain; const m = g.match;
     B.mag--; a.sq++;
+    { // bullets break any window between the bot and its target
+      const ex = a.pos.x, ey = a.pos.y + 1.45, ez = a.pos.z; const tx = t.pos.x - ex, ty = t.pos.y + 1.1 - ey, tz = t.pos.z - ez; const L = Math.hypot(tx, ty, tz);
+      if (L > 1) { const gh = g.world.raycast(ex, ey, ez, tx / L, ty / L, tz / L, L, false, 1); if (gh && gh.kind === 'glass') g.shatterGlass(gh.pane, true); }
+    }
     B.cool = 60 / def.rpm * (def.modes[0] === 'auto' ? (d > 60 ? 2.6 : 1.15) : 1.3 + this.rng() * 0.6);
     if (def.modes[0] === 'auto' && this.rng() < 0.12) B.cool += 0.5;
     // accuracy model

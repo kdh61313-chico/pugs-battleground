@@ -150,6 +150,10 @@ export class Effects {
     for (let i = 0; i < 6; i++) this.smoke.spawn(x + nx * 0.05, y + ny * 0.05, z + nz * 0.05, nx * 1.5 + (Math.random() - 0.5) * 1.5, ny * 1.5 + Math.random(), nz * 1.5 + (Math.random() - 0.5) * 1.5, 0.15, dust[0], dust[1], dust[2], 0.7, 0.9, 1.5, 0.6, 2);
     if (kind === 'box') for (let i = 0; i < 5; i++) this.glow.spawn(x, y, z, nx * 4 + (Math.random() - 0.5) * 5, ny * 4 + Math.random() * 3, nz * 4 + (Math.random() - 0.5) * 5, 0.05, 1, 0.75, 0.4, 1, 0.25, 9);
   }
+  glass(x, y, z) {
+    for (let i = 0; i < 26; i++) this.glow.spawn(x + (Math.random() - 0.5) * 0.9, y + (Math.random() - 0.5) * 0.8, z + (Math.random() - 0.5) * 0.9, (Math.random() - 0.5) * 3.5, Math.random() * 2, (Math.random() - 0.5) * 3.5, 0.04 + Math.random() * 0.05, 0.75, 0.88, 1.0, 0.9, 0.7 + Math.random() * 0.5, 9.8, 0, 0.5);
+    for (let i = 0; i < 6; i++) this.smoke.spawn(x, y, z, (Math.random() - 0.5) * 1.5, Math.random(), (Math.random() - 0.5) * 1.5, 0.25, 0.85, 0.9, 0.95, 0.25, 0.6, 0, 0.6, 1);
+  }
   explosion(x, y, z) {
     for (let i = 0; i < 30; i++) this.glow.spawn(x, y + 0.5, z, (Math.random() - 0.5) * 14, Math.random() * 10, (Math.random() - 0.5) * 14, 0.8 + Math.random(), 1, 0.6, 0.25, 1, 0.35, 6, 2, 3);
     for (let i = 0; i < 30; i++) this.smoke.spawn(x, y + 0.5, z, (Math.random() - 0.5) * 6, Math.random() * 4, (Math.random() - 0.5) * 6, 1.6, 0.25, 0.23, 0.2, 0.75, 3 + Math.random() * 2, -0.3, 1.8, 1.2);

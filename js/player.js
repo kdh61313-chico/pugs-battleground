@@ -42,8 +42,9 @@ export const PlayerMixin = {
   invTake(type, qty) { const have = this.me.inv[type] || 0; const n = Math.min(have, qty); if (n > 0) { this.me.inv[type] = have - n; if (!this.me.inv[type]) delete this.me.inv[type]; } return n; },
 
   // ---------- pick up ----------
-  pickup(entry) {
+  pickup(entry, quiet = false) {
     const me = this.me; const it = entry.it; const type = it.type; const info = itemInfo(type);
+    const toastQ = this.hud.toast.bind(this.hud); const hudT = quiet ? (m, k) => { if (k !== 'warn') toastQ(m, k); } : toastQ;
     let taken = 0, ok = false;
     const finish = () => {
       if (entry.crate) { this.emit('pk', entry.crate.id, entry.idx); entry.crate.items[entry.idx].taken = true; }
@@ -60,31 +61,66 @@ export const PlayerMixin = {
       me.slots[slot] = nw;
       this.autoAttach(nw);
       if (me.held === -1 || me.held === slot || me.held === 3) this.equip(slot);
-      finish(); this.hud.toast(`${d.name} 획득`); ok = true;
+      finish(); hudT(`${d.name} 획득`); ok = true;
     } else if (info.kind === 'ammo' || info.kind === 'heal' || info.kind === 'boost' || info.kind === 'throw') {
       taken = this.invAdd(type, it.qty);
-      if (taken <= 0) { this.hud.toast('가방 공간이 부족합니다', 'warn'); return false; }
+      if (taken <= 0) { hudT('가방 공간이 부족합니다', 'warn'); return false; }
       if (taken < it.qty) {
         if (entry.crate) entry.crate.items[entry.idx].qty -= taken; // local only; others still see full qty
         else { finish(); this.dropItem(type, it.qty - taken, it.x, it.y, it.z); return true; }
-        this.audio.ui('pick'); this.hud.toast(`${info.name} ×${taken}`); return true;
+        this.audio.ui('pick'); hudT(`${info.name} ×${taken}`); return true;
       }
-      finish(); this.hud.toast(`${info.name}${it.qty > 1 ? ' ×' + it.qty : ''}`); ok = true;
+      finish(); hudT(`${info.name}${it.qty > 1 ? ' ×' + it.qty : ''}`); ok = true;
     } else if (info.kind === 'attach') {
-      if (!this.attachToBest(type)) { if (this.invAdd(type, 1) <= 0) { this.hud.toast('가방 공간이 부족합니다', 'warn'); return false; } }
-      finish(); this.hud.toast(info.name); ok = true;
+      if (!this.attachToBest(type)) { if (this.invAdd(type, 1) <= 0) { hudT('가방 공간이 부족합니다', 'warn'); return false; } }
+      finish(); hudT(info.name); ok = true;
     } else if (info.kind === 'helm' || info.kind === 'vest') {
       const cur = me[info.kind];
       if (cur) this.dropItem(cur.type, 1, me.pos.x + 0.3, me.pos.y, me.pos.z + 0.3);
       me[info.kind] = { type, dur: ITEMS[type].dur };
-      finish(); this.hud.toast(`${info.name} 착용`); ok = true;
+      finish(); hudT(`${info.name} 착용`); ok = true;
     } else if (info.kind === 'bag') {
       const cur = me.bag;
       if (cur) this.dropItem(cur, 1, me.pos.x + 0.3, me.pos.y, me.pos.z - 0.3);
-      me.bag = type; finish(); this.hud.toast(`${info.name} 착용`); ok = true;
+      me.bag = type; finish(); hudT(`${info.name} 착용`); ok = true;
     }
     this.hud.refreshInventory();
     return ok;
+  },
+  // what is worth grabbing automatically while walking over loot
+  autoWorth(it) {
+    const me = this.me, info = itemInfo(it.type);
+    if (info.kind === 'ammo') return [0, 1, 2].some((i) => me.slots[i] && WEAPONS[me.slots[i].id].ammo === it.type);
+    if (info.kind === 'heal' || info.kind === 'boost' || info.kind === 'throw') return true;
+    if (info.kind === 'attach') { const A = ATTACH[it.type]; return [0, 1, 2].some((i) => { const w = me.slots[i]; return w && WEAPONS[w.id].slots.includes(A.slot) && !w.att[A.slot] && this.attachFits(w, it.type); }); }
+    if (info.kind === 'helm' || info.kind === 'vest') { const cur = me[info.kind]; return !cur || ITEMS[cur.type].lvl < info.lvl; }
+    if (info.kind === 'bag') return !me.bag || ITEMS[me.bag].lvl < info.lvl;
+    if (info.kind === 'weapon') return !me.slots[0] && !me.slots[1] && WEAPONS[it.type].cat !== 'PST';
+    return false;
+  },
+  attachFits(w, type) { const A = ATTACH[type]; if (A.only && !A.only.includes(WEAPONS[w.id].cat)) return false; if (A.ammo && A.ammo !== WEAPONS[w.id].ammo) return false; return true; },
+  autoPickup(dt) {
+    const me = this.me; me.autoT = (me.autoT || 0) - dt; if (me.autoT > 0) return;
+    me.autoSkip = me.autoSkip || new Set();
+    for (const n of me.nearby) {
+      if (n.d > 1.6) continue; const key = n.crate ? n.crate.id + ':' + n.idx : n.it.id;
+      if (me.autoSkip.has(key) || !this.autoWorth(n.it)) continue;
+      me.autoT = 0.2;
+      if (!this.pickup(n, true)) me.autoSkip.add(key);
+      return;
+    }
+  },
+  pickupAll() {
+    const me = this.me; let n = 0, guard = 0;
+    me.nearby = this.nearbyItems(me.pos, 2.6);
+    while (guard++ < 40) {
+      const e = me.nearby.find((x) => this.autoWorth(x.it) && !(me.autoSkip && me.autoSkip.has(x.crate ? x.crate.id + ':' + x.idx : x.it.id)));
+      if (!e) break;
+      if (this.pickup(e, true)) n++; else (me.autoSkip || (me.autoSkip = new Set())).add(e.crate ? e.crate.id + ':' + e.idx : e.it.id);
+      me.nearby = this.nearbyItems(me.pos, 2.6);
+    }
+    this.hud.toast(n ? `${n}개 아이템 획득` : '주울 만한 아이템이 없습니다', n ? undefined : 'warn');
+    this.hud.refreshInventory();
   },
   autoAttach(w) {
     const d = WEAPONS[w.id];
@@ -305,6 +341,8 @@ export const PlayerMixin = {
     const press = (c) => locked && inp.pressed.has(c);
     let fwd = (key('KeyW') ? 1 : 0) - (key('KeyS') ? 1 : 0), side = (key('KeyD') ? 1 : 0) - (key('KeyA') ? 1 : 0);
     if (inp.joy && inp.joy.active && locked) { side = inp.joy.x; fwd = inp.joy.y; }
+    if (press('Equal') || press('KeyY')) { me.autoRun = !me.autoRun; this.hud.toast(me.autoRun ? '자동 달리기 켜짐 (W/S로 해제)' : '자동 달리기 꺼짐'); }
+    if (me.autoRun) { if (press('KeyW') || press('KeyS') || me.st !== 'ground' && me.st !== 'swim') me.autoRun = false; else if (fwd === 0) fwd = 1; }
     _f.set(Math.sin(me.yaw), 0, Math.cos(me.yaw)); _r.set(-Math.cos(me.yaw), 0, Math.sin(me.yaw));
     _d.set(0, 0, 0).addScaledVector(_f, fwd).addScaledVector(_r, side); if (_d.lengthSq() > 1) _d.normalize();
 
@@ -404,8 +442,9 @@ export const PlayerMixin = {
       for (const n of me.nearby) { const ang = Math.abs(angDiff(me.yaw, Math.atan2(n.it.x - me.pos.x, n.it.z - me.pos.z))); const s = n.d + ang * 0.6; if (s < bs) { bs = s; best = n; } }
       const info = itemInfo(best.it.type);
       prompt = `[F] ${best.crate ? (best.crate.kind === 'care' ? '보급 · ' : '상자 · ') : ''}${info.name}${best.it.qty > 1 ? ' ×' + best.it.qty : ''}`;
-      if (press('KeyF')) this.pickup(best);
+      if (press('KeyF')) { if (key('ShiftLeft')) this.pickupAll(); else this.pickup(best); }
     }
+    if (me.nearby.length && canAct && !me.action && this.settings.autoPick !== false) this.autoPickup(dt);
     this.hud.prompt(prompt);
 
     // action progress / cancel
@@ -468,7 +507,10 @@ export const PlayerMixin = {
     const busy = me.action && (me.action.kind === 'use' || me.action.kind === 'revive');
     const canShoot = me.st === 'ground' && !busy && me.switchT <= 0 && !this.hud.anyOverlay() && locked;
     // ADS
-    const wantAds = canShoot && (held || me.held === -1) && inp.mouseR && held && !(me.action && me.action.kind === 'reload') && !me.sprinting;
+    if (this.settings.adsToggle) { if (inp.mouseRPress) me.adsLatch = !me.adsLatch; } else me.adsLatch = inp.mouseR;
+    inp.mouseRPress = false;
+    if (!held || me.sprinting || (me.action && me.action.kind === 'reload')) me.adsLatch = this.settings.adsToggle ? false : me.adsLatch;
+    const wantAds = canShoot && (held || me.held === -1) && me.adsLatch && held && !(me.action && me.action.kind === 'reload') && !me.sprinting;
     me.ads = !!wantAds;
     const st = held ? this.wstats(held) : null;
     me.adsK = damp(me.adsK, me.ads ? 1 : 0, me.ads ? 1 / (st ? st.adsTime : 0.2) * 1.4 : 14, dt);
@@ -505,13 +547,14 @@ export const PlayerMixin = {
   tryMantle() {
     const me = this.me, W = this.world;
     const fx = Math.sin(me.yaw), fz = Math.cos(me.yaw);
+    for (const hh of [1.25, 1.6]) { const gh = W.raycast(me.pos.x, me.pos.y + hh, me.pos.z, fx, 0, fz, 1.3, false, 1); if (gh && gh.kind === 'glass') this.shatterGlass(gh.pane, true); }
     for (const dist of [0.55, 0.8, 1.05]) {
       const tx = me.pos.x + fx * dist, tz = me.pos.z + fz * dist;
-      const top = W.groundAt(tx, tz, me.pos.y + 1.6, 0.2);
+      const top = W.groundAt(tx, tz, me.pos.y + 2.2, 0.2);
       const h = top - me.pos.y;
-      if (h < 0.6 || h > 2.05) continue;
+      if (h < 0.6 || h > 2.65) continue;
       // something must actually block us in front (not just a slope)
-      const blockTop = W.groundAt(me.pos.x + fx * 0.35, me.pos.z + fz * 0.35, me.pos.y + 1.6, 0.15);
+      const blockTop = W.groundAt(me.pos.x + fx * 0.35, me.pos.z + fz * 0.35, me.pos.y + 2.2, 0.15);
       if (blockTop < me.pos.y + 0.5 && dist > 0.6) continue;
       const ceil = W.ceilingAbove(tx, tz, top + 0.05, 0.25);
       if (ceil < top + 1.0) continue;
@@ -595,6 +638,7 @@ export const PlayerMixin = {
   punch() {
     const me = this.me; me.punchT = 0.5; me.punchAnim = 1;
     const fx = Math.sin(me.yaw), fz = Math.cos(me.yaw);
+    { const gh = this.world.raycast(me.pos.x, me.pos.y + 1.4, me.pos.z, fx, 0, fz, 1.4, false, 1); if (gh && gh.kind === 'glass') this.shatterGlass(gh.pane, true); }
     for (const a of this.actors.values()) {
       if (!a.alive || (a.team === this.myTeam && this.match.mode > 1)) continue;
       const dx = a.pos.x - me.pos.x, dz = a.pos.z - me.pos.z; const d = Math.hypot(dx, dz);

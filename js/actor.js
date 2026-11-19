@@ -13,7 +13,7 @@ export class Actor {
     this.id = id; this.isBot = !!opts.isBot; this.name = opts.name || '???'; this.team = opts.team || id;
     this.colorIdx = opts.colorIdx || 0;
     const shirt = PLAYER_COLORS[this.colorIdx % PLAYER_COLORS.length];
-    this.char = new Character({ shirt, pants: opts.pants ?? 0x3a3f46, skin: opts.skin ?? 0, hair: opts.hair ?? 0 });
+    this.char = new Character({ shirt, pants: opts.pants ?? 0x56604a, skin: opts.skin ?? 0, hair: opts.hair ?? 0 });
     this.snaps = [];
     this.pos = new THREE.Vector3(); this.yaw = 0; this.pitch = 0;
     this.st = 'plane'; this.flags = 0; this.speed = 0; this.w = null; this.wb = null;
