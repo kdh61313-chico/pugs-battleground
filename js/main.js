@@ -5,8 +5,9 @@ import { Effects } from './effects.js';
 import { Audio } from './audio.js';
 import { Hud } from './hud.js';
 import { Game } from './game.js';
-import { Net, LocalNet, makeCode, cleanCode } from './net.js';
+import { Net, LocalNet, P2PNet, makeCode, cleanCode } from './net.js';
 import { PLAYER_COLORS } from './data.js';
+import { TouchControls, isTouchDevice } from './touch.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
@@ -18,10 +19,12 @@ const DEF = { name: '생존자' + Math.floor(Math.random() * 900 + 100), color: 
 let settings = { ...DEF };
 try { const s = JSON.parse(localStorage.getItem('lastcircle.settings') || 'null'); if (s) { settings = { ...DEF, ...s }; if (!s.cfgV || s.cfgV < 2) { settings.quality = 'med'; settings.cfgV = 2; } } } catch (e) {}
 settings.cfgV = 2;
+const TOUCH = isTouchDevice();
+if (TOUCH && !settings.touchCfg) { settings.quality = 'low'; settings.touchCfg = 1; }
 const saveSettings = () => { try { localStorage.setItem('lastcircle.settings', JSON.stringify(settings)); } catch (e) {} };
 if (!localStorage || !(() => { try { return localStorage.getItem('lastcircle.settings'); } catch (e) { return null; } })()) {
   // first run: pick quality by GPU hint
-  settings.quality = 'med';
+  settings.quality = TOUCH ? 'low' : 'med';
 }
 
 // ---------- renderer ----------
@@ -98,12 +101,15 @@ function applyQuality(keepComposer) {
 const world = new World();
 const fx = new Effects(scene);
 const audio = new Audio(); audio.setVolume(settings.vol);
-const realNet = new Net();
+let realNet = new Net();
 const app = {};
 const game = new Game({ renderer, scene, camera, world, audio, fx, hud: null, settings, net: realNet });
 game.app = app; game.saveSettings = saveSettings; game.realNet = realNet;
 const hud = new Hud(game); game.hud = hud;
-game.input = { down: new Set(), pressed: new Set(), mouseL: false, mouseR: false, mouseLPressed: false, dx: 0, dy: 0, wheel: 0 };
+hud.touchMode = TOUCH;
+if (!game.input) game.input = {};
+Object.assign(game.input, { down: new Set(), pressed: new Set(), mouseL: false, mouseR: false, mouseLPressed: false, dx: 0, dy: 0, wheel: 0, joy: { x: 0, y: 0, active: false } });
+const touch = new TouchControls(game, hud); if (TOUCH) touch.enable();
 applyQuality();
 realNet.onStatus = (st) => hud.netStatus(st);
 
@@ -153,6 +159,7 @@ addEventListener('keyup', (e) => { inp.down.delete(e.code); });
 addEventListener('blur', () => { inp.down.clear(); inp.mouseL = inp.mouseR = false; });
 addEventListener('mousedown', (e) => {
   audio.unlock();
+  if (TOUCH && hud.touchMode && (e.sourceCapabilities ? e.sourceCapabilities.firesTouchEvents : false)) return;
   if (hud.screen !== 'game' || !hud.captured() || hud.anyOverlay()) return;
   if (e.button === 0) { inp.mouseL = true; inp.mouseLPressed = true; }
   if (e.button === 2) inp.mouseR = true;
@@ -187,7 +194,7 @@ function frame() {
   world.update(dt, camera.position);
   world.updateGrass(camera.position.x, camera.position.z);
   fx.update(dt);
-  try { hud.update(dt); } catch (err) { console.error(err); }
+  try { hud.update(dt); touch.update(); } catch (err) { console.error(err); }
   // altitude-aware haze (less washed-out from the plane)
   { const alt = Math.max(0, camera.position.y - Math.max(0, world.heightAt(camera.position.x, camera.position.z)));
     const base = settings.quality === 'low' ? 1200 : settings.quality === 'med' ? 1700 : 2200;
@@ -200,6 +207,7 @@ function frame() {
   sunOff.copy(world.sunDir).multiplyScalar(300);
   sun.target.position.set(tx, Math.max(0, world.heightAt(tx, tz)), tz);
   sun.position.copy(sun.target.position).add(sunOff);
+  if (window.__pauseRender) return;
   if (composer) {
     const me = game.me; const hurt = game.mode === 'match' && me && me.st !== 'dead' && me.st !== 'spec' ? Math.max(0, (35 - (me.st === 'down' ? 0 : me.hp)) / 35) * 0.6 : 0;
     grade.uniforms.uHurt.value += (hurt - grade.uniforms.uHurt.value) * 0.1;
@@ -232,6 +240,12 @@ setInterval(app.bgTick, 250);
   fx.setScale(renderer.domElement.height, camera.fov);
   hud.showScreen('menu');
   requestAnimationFrame(frame);
-  realNet.init();
+  // claude.ai artifact -> built-in room; anywhere else -> peer-to-peer WebRTC
+  realNet.init().then(async (ok) => {
+    if (ok) return;
+    const p2p = new P2PNet(); p2p.onStatus = (st) => hud.netStatus(st, true);
+    hud.netStatus('checking', true);
+    if (await p2p.init()) { realNet = p2p; game.realNet = p2p; if (!(game.net instanceof LocalNet)) game.net = p2p; }
+  });
   window.__game = game;
 })().catch((e) => { console.error(e); document.getElementById('loadTxt').textContent = '로딩 실패: ' + e.message; });

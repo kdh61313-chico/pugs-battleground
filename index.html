@@ -2,7 +2,8 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-capable" content="yes">
 <title>LAST CIRCLE — 배틀로얄</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -231,6 +232,56 @@ select.field{padding:9px 10px}
 .sr span{font-family:Rajdhani;font-weight:700;width:38px;text-align:right}
 .keys{display:grid;grid-template-columns:auto 1fr;gap:6px 14px;font-size:13px;margin-top:10px}
 .keys kbd{font-family:Rajdhani;font-weight:700;background:rgba(255,255,255,.1);border:1px solid var(--line);border-radius:3px;padding:1px 7px;text-align:center;white-space:nowrap}
+
+/* ===== touch / mobile ===== */
+#touch{position:absolute;inset:0;pointer-events:none;display:none}
+#touch .tb{position:absolute;border-radius:50%;background:rgba(20,24,30,.42);border:2px solid rgba(255,255,255,.35);color:#fff;font-weight:700;font-size:13px;text-align:center;pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;backdrop-filter:blur(2px)}
+#touch .tb.fire{background:rgba(220,60,50,.45);border-color:rgba(255,190,180,.7);font-size:15px}
+#touch .tb.down{transform:scale(.92);background:rgba(255,181,71,.55)}
+#touch .tb.lit{border-color:var(--acc);box-shadow:0 0 12px rgba(255,181,71,.6)}
+#tLayer{position:absolute;inset:0;pointer-events:auto;touch-action:none}
+#tJoyBase{position:absolute;width:140px;height:140px;border-radius:50%;background:rgba(255,255,255,.08);border:2px solid rgba(255,255,255,.3);display:none;pointer-events:none}
+#tJoyKnob{position:absolute;left:40px;top:40px;width:60px;height:60px;border-radius:50%;background:rgba(255,255,255,.45)}
+#tTop{position:absolute;top:8px;left:50%;transform:translateX(-50%);display:flex;gap:6px;pointer-events:none}
+#tTop .tt{pointer-events:auto;touch-action:none;background:rgba(10,14,20,.55);border:1px solid rgba(255,255,255,.25);border-radius:6px;padding:6px 9px;font-size:12px;font-weight:700}
+.ovX{position:absolute;top:10px;left:16px;z-index:5;padding:8px 14px!important;font-size:13px!important}
+body.touch #compass,body.touch #bearing{top:46px}
+body.touch #bearing{top:82px}
+body.touch #compass{width:260px}
+body.touch #minimapWrap{width:132px;left:8px;top:8px}
+body.touch #minimap{width:132px;height:132px}
+body.touch #zoneInfo{font-size:10px;padding:3px 6px}body.touch #zoneInfo .t{font-size:14px}
+body.touch #runTip{font-size:10px}
+body.touch #topRight{top:46px;right:8px}
+body.touch .cbox{padding:3px 8px;font-size:11px}body.touch .cbox b{font-size:18px}
+body.touch #feed .fe{font-size:11px}
+body.touch #weapon{right:auto;left:150px;top:8px;bottom:auto;text-align:left;min-width:0}
+body.touch #slots{flex-direction:row;align-items:flex-start;margin:0 0 4px}
+body.touch #wName{font-size:11px}body.touch #wAmmo{font-size:28px}body.touch #wAmmo small{font-size:14px}body.touch #wMode{font-size:10px}
+body.touch #quick{display:none}
+body.touch #bottom{width:min(300px,40vw);bottom:10px}
+body.touch #gear .gi{width:38px;height:26px}
+body.touch #teamList{bottom:auto;top:200px;width:150px;font-size:11px}
+body.touch #prompt{top:auto;bottom:34%;font-size:12px}
+body.touch #toasts{bottom:90px}
+body.touch #planeHint{bottom:46%;font-size:13px}
+body.touch #alt{right:22%}
+body.touch #big{font-size:16px}
+body.touch .bn{font-size:13px;padding:6px 40px}
+body.touch #inv .grid{inset:52px 8px 8px;grid-template-columns:1fr 1fr 1.2fr;gap:8px}
+body.touch .ip{padding:8px}body.touch .it{padding:6px;font-size:12px}body.touch .it .ic{width:24px;height:24px}
+body.touch .menuWrap{left:3vw;width:min(380px,94vw)}
+body.touch .logo{font-size:44px}
+body.touch .menuFoot{display:none}
+#rotateHint{position:fixed;inset:0;background:#0b0e12;z-index:50;display:none;align-items:center;justify-content:center;text-align:center;font-size:18px;font-weight:700;flex-direction:column;gap:12px}
+@media (orientation:portrait){body.touch.ingame #rotateHint{display:flex}}
+/* drag & drop inventory */
+.dragGhost{position:fixed;z-index:100;pointer-events:none;transform:translate(-50%,-60%) scale(1.05);opacity:.92;box-shadow:0 8px 24px rgba(0,0,0,.5);border:1px solid var(--acc)!important;background:rgba(30,34,40,.95)!important;border-radius:6px;max-width:260px}
+.dropOk{outline:2px dashed var(--acc);outline-offset:-2px;background:rgba(255,181,71,.07)!important}
+.dropHot{outline:2px solid var(--ok)!important;background:rgba(93,255,143,.12)!important}
+.it{touch-action:pan-y}.wcard,.eq,.att{touch-action:none}
+#inv .ip{overscroll-behavior:contain}
+
 @media (max-width:900px){.lobbyWrap{grid-template-columns:1fr;overflow:auto}#compass{width:300px}#quick{display:none}}
 @media (max-height:640px){#minimapWrap{width:170px}#minimap{width:170px;height:170px}}
 </style>
@@ -261,10 +312,10 @@ select.field{padding:9px 10px}
         <select id="pSpeed" class="field"><option value="0.6">빠른 경기</option><option value="1" selected>일반</option></select>
       </div>
       <button class="btn" id="bPractice" style="width:100%;margin-top:8px">연습 시작</button>
-      <div class="row" style="margin-top:12px;justify-content:space-between"><button class="btn" id="bHelp" style="flex:1">조작법</button><button class="btn" id="bSettings" style="flex:1">설정</button></div>
+      <div class="row" style="margin-top:12px;justify-content:space-between"><button class="btn" id="bHelp" style="flex:1">조작법</button><button class="btn" id="bSettings" style="flex:1">설정</button><button class="btn" id="bFull" style="flex:1">전체화면</button></div>
     </div>
   </div>
-  <div class="menuFoot">LAST CIRCLE · 오리지널 브라우저 배틀로얄<br>마우스 + 키보드 권장</div>
+  <div class="menuFoot">LAST CIRCLE · 오리지널 브라우저 배틀로얄<br><span id="footHint">마우스 + 키보드 · 모바일 터치 지원</span></div>
 </div>
 
 <div id="lobby" class="screen">
@@ -321,17 +372,18 @@ select.field{padding:9px 10px}
   <div id="quick"></div>
   <div id="weapon"><div id="slots"></div><div id="wName">맨손</div><div id="wAmmo" class="num">—</div><div id="wMode"></div></div>
   <div id="fps" class="num" style="position:absolute;left:240px;top:20px;font-size:13px;color:#9f9;text-shadow:0 1px 2px #000;display:none"></div>
+  <div id="rotateHint">📱↻<div>가로 화면으로 돌려주세요</div><div style="font-size:13px;color:var(--dim);font-weight:400">게임은 가로 모드에 맞춰져 있습니다</div></div>
   <div id="clickPlay"><div>클릭하여 플레이<small>ESC: 메뉴 · Tab: 인벤토리 · M: 지도</small></div></div>
 </div>
 
-<div id="inv" class="ov"><div class="ovClose">Tab / ESC 로 닫기 · 좌클릭: 줍기/사용/장착 · 우클릭: 버리기</div>
+<div id="inv" class="ov"><div class="ovClose">끌어서 놓기: 줍기·장착·교체·버리기 · 클릭: 줍기/사용 · 우클릭: 버리기 · Tab 닫기</div>
   <div class="grid">
     <div class="ip"><h3>주변 <span id="invNearN"></span></h3><div id="invNear"></div></div>
     <div class="ip"><h3>가방 <span id="invCapT" class="num"></span></h3><div class="capbar"><i id="invCap"></i></div><div id="invBag"></div></div>
     <div class="ip"><h3>장비</h3><div class="eqrow" id="invEq"></div><div id="invW"></div></div>
   </div>
 </div>
-<div id="map" class="ov"><canvas id="bigmap" width="1600" height="1600"></canvas><div id="mapHelp">휠: 확대/축소 · 드래그: 이동 · 우클릭: 마커 (팀원에게 공유) · M / ESC 닫기</div></div>
+<div id="map" class="ov"><canvas id="bigmap" width="1600" height="1600"></canvas><div id="mapHelp">휠·두 손가락: 확대/축소 · 드래그: 이동 · 우클릭·두 번 탭: 마커 (팀원 공유) · M / ESC 닫기</div></div>
 <div id="result" class="ov"><div class="res"><div class="rk num">#<b id="rRank">1</b></div><h1 id="rTitle">-</h1><div class="hint" id="rSub" style="margin:-10px 0 18px"></div>
   <div class="stats"><div class="stat"><b id="rK" class="num">0</b><span>처치</span></div><div class="stat"><b id="rD" class="num">0</b><span>피해량</span></div><div class="stat"><b id="rT" class="num">0:00</b><span>생존 시간</span></div></div>
   <div class="row" style="justify-content:center"><button class="btn" id="bSpec">관전하기</button><button class="btn pri" id="bLobby">로비로</button></div></div></div>
@@ -344,6 +396,7 @@ select.field{padding:9px 10px}
   <div class="sr">그래픽 품질<select id="oQ" class="field" style="max-width:240px"><option value="low">낮음 (빠름)</option><option value="med">중간 (권장)</option><option value="high">높음 (블룸·고급 그림자)</option></select></div>
   <div class="sr">상하 반전<input type="checkbox" id="oInv"></div>
   <div class="sr">FPS 표시<input type="checkbox" id="oFps"></div>
+  <div class="sr">터치 시점 감도<input type="range" id="oTouch" min="0.3" max="3" step="0.05"><span id="oTouchV"></span></div>
   <div class="hint">그래픽 품질 변경은 새로고침 후 완전히 적용됩니다.</div>
   <div class="row" style="margin-top:16px"><button class="btn pri" id="bResume" style="flex:1">계속하기</button><button class="btn" id="bQuit" style="flex:1">경기 나가기</button></div>
 </div></div>

@@ -113,6 +113,34 @@ export const PlayerMixin = {
     }
     return false;
   },
+  pickupToSlot(entry, slot) {
+    const me = this.me; const type = entry.it.type; const d = WEAPONS[type]; if (!d) return false;
+    if ((slot === 2) !== (d.cat === 'PST')) return false;
+    const finish = () => { if (entry.crate) { this.emit('pk', entry.crate.id, entry.idx); entry.crate.items[entry.idx].taken = true; } else { this.emit('pk', entry.it.id, -1); this.removeItem(entry.it.id); } this.audio.ui('pick'); };
+    if (me.slots[slot]) this.dropWeapon(slot, true);
+    const nw = { id: type, mag: 0, att: { s: null, m: null, g: null, x: null }, mode: 0 };
+    me.slots[slot] = nw; this.autoAttach(nw); finish();
+    if (me.held === -1 || me.held === slot) { me.held = -2; this.equip(slot); }
+    this.hud.toast(`${d.name} → ${slot === 2 ? '권총' : '주무기 ' + (slot + 1)}`);
+    return true;
+  },
+  swapSlots(a, b) {
+    const me = this.me; if (a > 1 || b > 1 || a === b) return;
+    [me.slots[a], me.slots[b]] = [me.slots[b], me.slots[a]];
+    if (me.held === a) me.held = b; else if (me.held === b) me.held = a;
+    this.audio.ui('click');
+  },
+  attachTo(src, slot) { // src: {from:'bag'|'near'|'att', type, n?, slot?, aslot?}
+    const me = this.me; const w = me.slots[slot]; if (!w) return false; const A = ATTACH[src.type]; if (!A || !WEAPONS[w.id].slots.includes(A.slot)) return false;
+    if (src.from === 'bag') return this.attachFromInv(src.type, slot);
+    if (src.from === 'att') { const from = me.slots[src.slot]; if (!from || from.att[src.aslot] !== src.type) return false; from.att[src.aslot] = null; if (w.att[A.slot]) { const old = w.att[A.slot]; if (WEAPONS[from.id].slots.includes(A.slot)) from.att[A.slot] = old; else if (this.invAdd(old, 1) <= 0) this.dropItem(old, 1, me.pos.x, me.pos.y, me.pos.z); } w.att[A.slot] = src.type; this.audio.ui('click'); return true; }
+    if (src.from === 'near') { // straight from the ground onto the gun
+      if (w.att[A.slot]) this.detach(slot, A.slot);
+      const n = src.n; if (n.crate) { this.emit('pk', n.crate.id, n.idx); n.crate.items[n.idx].taken = true; } else { this.emit('pk', n.it.id, -1); this.removeItem(n.it.id); }
+      w.att[A.slot] = src.type; this.audio.ui('pick'); this.hud.toast(`${A.name} 장착`); return true;
+    }
+    return false;
+  },
   detach(slotIdx, aslot) {
     const w = this.me.slots[slotIdx]; if (!w || !w.att[aslot]) return;
     const t = w.att[aslot];
@@ -275,7 +303,8 @@ export const PlayerMixin = {
     inp.dx = inp.dy = 0;
     const key = (c) => locked && inp.down.has(c);
     const press = (c) => locked && inp.pressed.has(c);
-    const fwd = (key('KeyW') ? 1 : 0) - (key('KeyS') ? 1 : 0), side = (key('KeyD') ? 1 : 0) - (key('KeyA') ? 1 : 0);
+    let fwd = (key('KeyW') ? 1 : 0) - (key('KeyS') ? 1 : 0), side = (key('KeyD') ? 1 : 0) - (key('KeyA') ? 1 : 0);
+    if (inp.joy && inp.joy.active && locked) { side = inp.joy.x; fwd = inp.joy.y; }
     _f.set(Math.sin(me.yaw), 0, Math.cos(me.yaw)); _r.set(-Math.cos(me.yaw), 0, Math.sin(me.yaw));
     _d.set(0, 0, 0).addScaledVector(_f, fwd).addScaledVector(_r, side); if (_d.lengthSq() > 1) _d.normalize();
 
@@ -386,7 +415,7 @@ export const PlayerMixin = {
     }
 
     // ===== movement =====
-    const sprintReq = key('ShiftLeft') && fwd > 0 && !me.ads && me.st === 'ground' && !(me.action && me.action.kind === 'use' && me.action.type !== 'bandage' && me.action.type !== 'energy');
+    const sprintReq = (key('ShiftLeft') || (inp.joy && inp.joy.sprint)) && fwd > 0 && !me.ads && me.st === 'ground' && !(me.action && me.action.kind === 'use' && me.action.type !== 'bandage' && me.action.type !== 'energy');
     if (sprintReq && me.prone) { me.prone = false; me.crouch = true; }
     if (sprintReq && me.crouch) { const c = W.ceilingAbove(me.pos.x, me.pos.z, me.pos.y + 1.0); if (c > me.pos.y + 1.85) me.crouch = false; }
     me.sprinting = sprintReq && !me.crouch;

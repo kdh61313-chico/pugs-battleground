@@ -22,20 +22,24 @@ export class Hud {
     this.mini = $('minimap').getContext('2d');
     this.big = $('bigmap').getContext('2d');
     this.tags = {}; this.lastInvRefresh = 0;
+    $('slots').addEventListener('pointerdown', (e) => { const el = e.target.closest('.slot'); if (!el || this.screen !== 'game') return; e.stopPropagation(); const i = +el.dataset.i; if (i === 3 && this.g.me.held === 3) { this.g.input.pressed.add('Digit5'); } else this.g.equip(i); });
+    for (const id of ['inv', 'map']) { const b = document.createElement('button'); b.className = 'btn ovX'; b.textContent = '닫기 ✕'; b.onclick = () => (id === 'inv' ? this.toggleInventory(false) : this.toggleMap(false)); $(id).appendChild(b); }
   }
   // ---------- screens ----------
   showScreen(name) {
     this.screen = name;
+    document.body.classList.toggle('ingame', name === 'game');
     for (const s of ['loading', 'menu', 'lobby', 'hud']) $(s).classList.toggle('on', s === name || (name === 'game' && s === 'hud'));
     if (name !== 'game') { this.closeAll(); if (document.pointerLockElement) document.exitPointerLock(); }
     if (name === 'menu') this.refreshMenu();
-    if (name === 'game') $('clickPlay').classList.add('on');
+    if (name === 'game' && !this.touchMode) $('clickPlay').classList.add('on');
   }
   loading(p, txt) { $('loadBar').style.width = Math.round(p * 100) + '%'; $('loadTxt').textContent = txt; }
-  captured() { return !!document.pointerLockElement || this.fakeLock; }
+  captured() { return !!document.pointerLockElement || this.fakeLock || (this.touchMode && this.screen === 'game'); }
   anyOverlay() { return ['inv', 'map', 'pause', 'result', 'help'].some((id) => $(id).classList.contains('on')); }
   closeAll() { for (const id of ['inv', 'map', 'pause', 'result', 'help']) $(id).classList.remove('on'); }
   requestLock() {
+    if (this.touchMode) { this.g.audio.unlock(); return; }
     const c = this.g.renderer.domElement;
     this.g.audio.unlock();
     try {
@@ -47,7 +51,7 @@ export class Hud {
   releaseLock() { this.fakeLock = false; if (document.pointerLockElement) document.exitPointerLock(); }
   onLockChange() {
     const locked = this.captured();
-    $('clickPlay').classList.toggle('on', this.screen === 'game' && !locked && !this.anyOverlay());
+    $('clickPlay').classList.toggle('on', this.screen === 'game' && !locked && !this.anyOverlay() && !this.touchMode);
     if (!document.pointerLockElement && !this.fakeLock && this.screen === 'game' && !this.anyOverlay() && this.wasLocked) this.openPause();
     this.wasLocked = locked;
   }
@@ -66,17 +70,19 @@ export class Hud {
     $('bHelp').onclick = () => $('help').classList.add('on');
     $('bHelpClose').onclick = () => $('help').classList.remove('on');
     $('bSettings').onclick = () => this.openPause(true);
+    $('bFull').onclick = () => { try { const d = document.documentElement; const r = d.requestFullscreen ? d.requestFullscreen({ navigationUI: 'hide' }) : d.webkitRequestFullscreen && d.webkitRequestFullscreen(); Promise.resolve(r).then(() => { try { screen.orientation.lock('landscape').catch(() => {}); } catch (e) {} }).catch(() => this.toast('이 환경에서는 전체화면을 쓸 수 없습니다')); } catch (e) {} };
   }
   refreshMenu() {
     const S = this.g.settings;
     $('nameIn').value = S.name;
     [...$('swatches').children].forEach((d, i) => d.classList.toggle('on', i === S.color));
   }
-  netStatus(st) {
+  netStatus(st, p2p) {
     const dot = $('netDot'), t = $('netTxt');
-    dot.className = 'dot ' + (st === 'ready' || st === 'connected' ? 'ok' : st === 'offline' ? 'bad' : '');
-    t.textContent = st === 'ready' || st === 'connected' ? '멀티플레이 사용 가능' : st === 'offline' ? '멀티플레이를 쓸 수 없는 환경입니다 (연습 모드는 가능)' : st === 'reconnecting' ? '재연결 중…' : st.startsWith('error') ? '연결 오류 — 새로고침 해주세요' : '연결 확인 중…';
-    $('bCreate').disabled = $('bJoin').disabled = !(st === 'ready' || st === 'connected');
+    const ok = st === 'ready' || st === 'connected';
+    dot.className = 'dot ' + (ok ? 'ok' : st === 'offline' ? 'bad' : '');
+    t.textContent = ok ? (p2p ? '멀티플레이 사용 가능 (P2P 직접 연결)' : '멀티플레이 사용 가능') : st === 'offline' ? (p2p ? '이 브라우저는 P2P 연결을 지원하지 않습니다 (연습 모드는 가능)' : '멀티플레이 확인 중…') : st === 'reconnecting' ? '재연결 중…' : st === 'error:relay' ? '연결 서버 응답 없음 — 잠시 후 다시 시도하세요' : st.startsWith('error') ? '연결 오류 — 새로고침 해주세요' : '연결 확인 중…';
+    $('bCreate').disabled = $('bJoin').disabled = !ok;
     $('netWarn').style.display = st === 'reconnecting' ? 'block' : 'none';
   }
   // ---------- lobby ----------
@@ -134,6 +140,7 @@ export class Hud {
     bindR('oAds', 'adsSens', (v) => v.toFixed(2));
     bindR('oFov', 'fov', (v) => v | 0);
     bindR('oVol', 'vol', (v) => Math.round(v * 100), () => g.audio.setVolume(S.vol));
+    if (S.touchSens == null) S.touchSens = 1; bindR('oTouch', 'touchSens', (v) => v.toFixed(2));
     $('oQ').value = S.quality; $('oQ').onchange = (e) => { S.quality = e.target.value; g.saveSettings(); g.app.applyQuality(); };
     $('oInv').checked = !!S.invertY; $('oInv').onchange = (e) => { S.invertY = e.target.checked; g.saveSettings(); };
     $('oFps').checked = !!S.showFps; $('oFps').onchange = (e) => { S.showFps = e.target.checked; g.saveSettings(); $('fps').style.display = S.showFps ? 'block' : 'none'; };
@@ -244,7 +251,10 @@ export class Hud {
   // ---------- inventory ----------
   refreshInventory(force) {
     if (!$('inv').classList.contains('on')) return;
+    if (this.drag && this.drag.active) return; // don't rebuild under the finger
     const g = this.g, me = g.me;
+    this.srcs = [];
+    const S = (o) => { this.srcs.push(o); return this.srcs.length - 1; };
     const icon = (type, kind) => {
       const info = itemInfo(type); const k = kind || info.kind;
       const lbl = k === 'weapon' ? WEAPONS[type].cat : k === 'ammo' ? AMMO[type].name.replace(/mm| 게이지| ACP| 매그넘/g, '') : KIND_LBL[k] || '?';
@@ -254,68 +264,176 @@ export class Hud {
     // near
     const near = g.nearbyItems(me.pos, 3.2);
     $('invNearN').textContent = near.length ? near.length + '개' : '';
-    const nEl = $('invNear'); nEl.innerHTML = near.length ? '' : '<div class="hint">주변에 아이템이 없습니다</div>';
+    const nEl = $('invNear'); nEl.dataset.drop = 'near';
+    nEl.innerHTML = near.length ? '' : '<div class="hint">주변에 아이템이 없습니다<br>가방·장비를 여기로 끌어 놓으면 버립니다</div>';
     near.slice(0, 40).forEach((n) => {
       const info = itemInfo(n.it.type);
-      const d = document.createElement('div'); d.className = 'it';
+      const d = document.createElement('div'); d.className = 'it'; d.dataset.src = S({ from: 'near', n, type: n.it.type });
       d.innerHTML = `${icon(n.it.type)}<span>${escapeHtml(info.name)}<span class="sub">${n.crate ? (n.crate.kind === 'care' ? '보급 상자' : escapeHtml(n.crate.owner || '') + ' 의 상자') : '바닥'}${itemWeight(n.it.type, n.it.qty) ? ' · 무게 ' + itemWeight(n.it.type, n.it.qty).toFixed(1) : ''}</span></span><span class="q">${n.it.qty > 1 ? n.it.qty : ''}</span>`;
-      d.onclick = () => { g.pickup(n); this.refreshInventory(); };
       nEl.appendChild(d);
     });
     // bag
     const cap = g.capacity(), load = g.load();
     $('invCapT').textContent = `${Math.round(load)} / ${cap}`; $('invCap').style.width = Math.min(100, (load / cap) * 100) + '%';
-    const bEl = $('invBag'); bEl.innerHTML = '';
+    const bEl = $('invBag'); bEl.innerHTML = ''; bEl.parentElement.dataset.drop = 'bag';
     const order = ['ammo', 'heal', 'boost', 'throw', 'attach'];
     const keys = Object.keys(me.inv).sort((a, b) => order.indexOf(itemInfo(a).kind) - order.indexOf(itemInfo(b).kind));
-    if (!keys.length) bEl.innerHTML = '<div class="hint">가방이 비어 있습니다</div>';
+    if (!keys.length) bEl.innerHTML = '<div class="hint">가방이 비어 있습니다<br>주변 아이템을 여기로 끌어 오세요</div>';
     for (const k of keys) {
       const info = itemInfo(k); const q = me.inv[k];
-      const d = document.createElement('div'); d.className = 'it';
-      const act = info.kind === 'heal' || info.kind === 'boost' ? '클릭: 사용' : info.kind === 'attach' ? '클릭: 장착' : info.kind === 'throw' ? '클릭: 들기' : '';
-      d.innerHTML = `${icon(k)}<span>${escapeHtml(info.name)}<span class="sub">${act}${act ? ' · ' : ''}우클릭: 버리기</span></span><span class="q">${q}</span>`;
-      d.onclick = () => {
-        if (info.kind === 'heal' || info.kind === 'boost') { g.useItem(k); this.toggleInventory(false); }
-        else if (info.kind === 'attach') { const order = [me.held, 0, 1, 2].filter((i) => i >= 0 && i <= 2); let ok = false; for (const i of order) { const w = me.slots[i]; if (w && WEAPONS[w.id].slots.includes(ATTACH[k].slot) && !w.att[ATTACH[k].slot]) { ok = g.attachFromInv(k, i); break; } } if (!ok) for (const i of order) if (g.attachFromInv(k, i)) { ok = true; break; } if (!ok) this.toast('장착할 수 있는 무기가 없습니다', 'warn'); }
-        else if (info.kind === 'throw') { me.throwSel = k; g.equip(3); this.toggleInventory(false); }
-        this.refreshInventory();
-      };
-      d.oncontextmenu = (e) => { e.preventDefault(); g.dropInv(k, e.shiftKey ? Math.ceil(q / 2) : q); };
+      const d = document.createElement('div'); d.className = 'it'; d.dataset.src = S({ from: 'bag', type: k, qty: q });
+      const act = info.kind === 'heal' || info.kind === 'boost' ? '탭: 사용' : info.kind === 'attach' ? '총으로 끌어서 장착' : info.kind === 'throw' ? '탭: 들기' : '';
+      d.innerHTML = `${icon(k)}<span>${escapeHtml(info.name)}<span class="sub">${act}${act ? ' · ' : ''}주변으로 끌면 버림</span></span><span class="q">${q}</span>`;
       bEl.appendChild(d);
     }
     // equipment
     const eq = $('invEq'); eq.innerHTML = '';
     const gear = [['helm', '헬멧', me.helm && ITEMS[me.helm.type], me.helm && me.helm.dur], ['vest', '방탄복', me.vest && ITEMS[me.vest.type], me.vest && me.vest.dur], ['bag', '배낭', me.bag && ITEMS[me.bag], null]];
     for (const [k, nm, it, dur] of gear) {
-      const d = document.createElement('div'); d.className = 'eq';
+      const d = document.createElement('div'); d.className = 'eq'; d.dataset.drop = 'gear'; d.dataset.kind = k;
+      if (it) d.dataset.src = S({ from: 'gear', kind: k, type: k === 'bag' ? me.bag : me[k].type });
       d.innerHTML = it ? `<b>${nm} Lv.${it.lvl}</b>${dur != null ? '내구도 ' + Math.max(0, Math.round((dur / it.dur) * 100)) + '%' : '용량 ' + it.cap}` : `<b style="color:var(--dim)">${nm}</b>없음`;
-      d.oncontextmenu = (e) => { e.preventDefault(); g.dropGear(k); };
-      d.title = '우클릭: 버리기';
       eq.appendChild(d);
     }
     const wEl = $('invW'); wEl.innerHTML = '';
     const SL = { s: '조준경', m: '총구', g: '손잡이', x: '탄창' };
     ['주무기 1', '주무기 2', '권총'].forEach((nm, i) => {
-      const w = me.slots[i]; const d = document.createElement('div'); d.className = 'wcard' + (me.held === i ? ' on' : '');
-      if (!w) { d.innerHTML = `<div class="wt">${nm}<span>비어 있음</span></div>`; wEl.appendChild(d); return; }
+      const w = me.slots[i]; const d = document.createElement('div'); d.className = 'wcard' + (me.held === i ? ' on' : ''); d.dataset.drop = 'weapon'; d.dataset.slot = i;
+      if (!w) { d.innerHTML = `<div class="wt">${nm}<span>비어 있음 · 총을 끌어 놓으세요</span></div>`; wEl.appendChild(d); return; }
+      d.dataset.src = S({ from: 'weapon', slot: i, type: w.id });
       const def = WEAPONS[w.id]; const st = g.wstats(w);
-      d.innerHTML = `<div class="wt">${escapeHtml(def.name)}<span>${i + 1} · ${def.cat} · ${AMMO[def.ammo].name} · ${w.mag}/${st.mag}</span></div><div class="atts">${['s', 'm', 'g', 'x'].map((s) => { const has = w.att[s]; const ok = def.slots.includes(s); return `<div class="att ${has ? 'has' : ''} ${ok ? '' : 'na'}" data-s="${s}">${has ? escapeHtml(ATTACH[has].name) : SL[s]}</div>`; }).join('')}</div><div class="hint" style="margin-top:6px">클릭: 들기 · 우클릭: 버리기 · 부착물 클릭: 해제</div>`;
-      d.onclick = (e) => { const a = e.target.closest('.att'); if (a && a.classList.contains('has')) { e.stopPropagation(); g.detach(i, a.dataset.s); return; } g.equip(i); this.refreshInventory(); };
-      d.oncontextmenu = (e) => { e.preventDefault(); g.dropWeapon(i); };
+      d.innerHTML = `<div class="wt">${escapeHtml(def.name)}<span>${i + 1} · ${def.cat} · ${AMMO[def.ammo].name} · ${w.mag}/${st.mag}</span></div><div class="atts">${['s', 'm', 'g', 'x'].map((sl) => { const has = w.att[sl]; const ok = def.slots.includes(sl); const src = has ? ` data-src="${S({ from: 'att', slot: i, aslot: sl, type: has })}"` : ''; return `<div class="att ${has ? 'has' : ''} ${ok ? '' : 'na'}" ${ok ? `data-drop="att" data-slot="${i}" data-a="${sl}"` : ''}${src}>${has ? escapeHtml(ATTACH[has].name) : SL[sl]}</div>`; }).join('')}</div><div class="hint" style="margin-top:6px">탭: 들기 · 끌어서 다른 칸과 교체 · 주변으로 끌면 버림</div>`;
       wEl.appendChild(d);
     });
+    this.bindInvDrag();
+  }
+  // ---------- inventory drag & drop (mouse + touch via pointer events) ----------
+  bindInvDrag() {
+    if (this.invDragBound) return; this.invDragBound = true;
+    const root = $('inv');
+    root.addEventListener('pointerdown', (e) => {
+      if (e.button === 2) return;
+      const el = e.target.closest('[data-src]'); if (!el) return;
+      const src = this.srcs[+el.dataset.src]; if (!src) return;
+      this.drag = { src, el, x0: e.clientX, y0: e.clientY, id: e.pointerId, active: false, ghost: null };
+      if (e.pointerType === 'mouse') e.preventDefault();
+    });
+    window.addEventListener('pointermove', (e) => {
+      const d = this.drag; if (!d || e.pointerId !== d.id) return;
+      if (!d.active && Math.hypot(e.clientX - d.x0, e.clientY - d.y0) > 7) {
+        d.active = true;
+        const gh = d.el.cloneNode(true); gh.classList.add('dragGhost'); gh.style.width = Math.min(260, d.el.offsetWidth) + 'px'; document.body.appendChild(gh); d.ghost = gh;
+        root.querySelectorAll('[data-drop]').forEach((t) => { if (this.canDrop(d.src, t)) t.classList.add('dropOk'); });
+      }
+      if (d.active) {
+        d.ghost.style.left = e.clientX + 'px'; d.ghost.style.top = e.clientY + 'px';
+        const t = this.dropTargetAt(e.clientX, e.clientY);
+        root.querySelectorAll('.dropHot').forEach((x) => x !== t && x.classList.remove('dropHot'));
+        if (t && this.canDrop(d.src, t)) t.classList.add('dropHot');
+      }
+    });
+    const finish = (e) => {
+      const d = this.drag; if (!d || e.pointerId !== d.id) return;
+      this.drag = null;
+      root.querySelectorAll('.dropOk,.dropHot').forEach((x) => x.classList.remove('dropOk', 'dropHot'));
+      if (d.ghost) d.ghost.remove();
+      if (e.type === 'pointercancel') return;
+      if (d.active) { const t = this.dropTargetAt(e.clientX, e.clientY); if (t && this.canDrop(d.src, t)) this.doDrop(d.src, t); }
+      else this.clickSrc(d.src);
+      this.refreshInventory();
+    };
+    window.addEventListener('pointerup', finish); window.addEventListener('pointercancel', finish);
+    root.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      const el = e.target.closest('[data-src]'); if (!el) return; const src = this.srcs[+el.dataset.src]; if (!src) return;
+      this.doDrop(src, { dataset: { drop: 'near' } }, e.shiftKey); this.refreshInventory();
+    });
+  }
+  dropTargetAt(x, y) {
+    const el = document.elementFromPoint(x, y); if (!el) return null;
+    return el.closest('[data-drop]');
+  }
+  canDrop(src, t) {
+    const drop = t.dataset.drop, g = this.g, me = g.me;
+    const info = itemInfo(src.type); const kind = info.kind;
+    switch (drop) {
+      case 'near': return src.from !== 'near';
+      case 'bag': return (src.from === 'near' && kind !== 'weapon' && !['helm', 'vest', 'bag'].includes(kind)) || src.from === 'att';
+      case 'gear': return src.from === 'near' && kind === t.dataset.kind;
+      case 'weapon': {
+        const slot = +t.dataset.slot;
+        if (kind === 'weapon' && src.from === 'near') return slot === 2 ? WEAPONS[src.type].cat === 'PST' : WEAPONS[src.type].cat !== 'PST';
+        if (src.from === 'weapon') return src.slot !== slot && src.slot < 2 && slot < 2;
+        if (kind === 'attach' && (src.from === 'bag' || src.from === 'near' || src.from === 'att')) { const w = me.slots[slot]; return !!w && WEAPONS[w.id].slots.includes(ATTACH[src.type].slot) && !(src.from === 'att' && src.slot === slot); }
+        return false;
+      }
+      case 'att': {
+        if (kind !== 'attach' || !(src.from === 'bag' || src.from === 'near' || src.from === 'att')) return false;
+        if (ATTACH[src.type].slot !== t.dataset.a) return false;
+        return !(src.from === 'att' && src.slot === +t.dataset.slot);
+      }
+    }
+    return false;
+  }
+  doDrop(src, t, half) {
+    const g = this.g, me = g.me; const drop = t.dataset.drop;
+    if (drop === 'near') {
+      if (src.from === 'bag') g.dropInv(src.type, half ? Math.ceil(src.qty / 2) : src.qty);
+      else if (src.from === 'gear') g.dropGear(src.kind);
+      else if (src.from === 'weapon') g.dropWeapon(src.slot);
+      else if (src.from === 'att') { const w = me.slots[src.slot]; if (w && w.att[src.aslot]) { const ty = w.att[src.aslot]; w.att[src.aslot] = null; g.dropItem(ty, 1, me.pos.x, me.pos.y, me.pos.z); } }
+      g.audio.ui('click'); return;
+    }
+    if (drop === 'bag') { if (src.from === 'near') g.pickup(src.n); else if (src.from === 'att') g.detach(src.slot, src.aslot); return; }
+    if (drop === 'gear') { g.pickup(src.n); return; }
+    if (drop === 'weapon' || drop === 'att') {
+      const slot = +t.dataset.slot;
+      if (src.from === 'near' && itemInfo(src.type).kind === 'weapon') { g.pickupToSlot(src.n, slot); return; }
+      if (src.from === 'weapon') { g.swapSlots(src.slot, slot); return; }
+      if (itemInfo(src.type).kind === 'attach') { g.attachTo(src, slot); return; }
+    }
+  }
+  clickSrc(src) {
+    const g = this.g, me = g.me; const kind = itemInfo(src.type).kind;
+    if (src.from === 'near') { g.pickup(src.n); return; }
+    if (src.from === 'weapon') { g.equip(src.slot); return; }
+    if (src.from === 'att') { g.detach(src.slot, src.aslot); return; }
+    if (src.from === 'bag') {
+      const k = src.type;
+      if (kind === 'heal' || kind === 'boost') { g.useItem(k); this.toggleInventory(false); }
+      else if (kind === 'attach') { const order = [me.held, 0, 1, 2].filter((i) => i >= 0 && i <= 2); let ok = false; for (const i of order) { const w = me.slots[i]; if (w && WEAPONS[w.id].slots.includes(ATTACH[k].slot) && !w.att[ATTACH[k].slot]) { ok = g.attachFromInv(k, i); break; } } if (!ok) for (const i of order) if (g.attachFromInv(k, i)) { ok = true; break; } if (!ok) this.toast('장착할 수 있는 무기가 없습니다', 'warn'); }
+      else if (kind === 'throw') { me.throwSel = k; g.equip(3); this.toggleInventory(false); }
+    }
   }
 
   // ---------- map ----------
   bindMap() {
-    const c = $('bigmap');
-    c.addEventListener('wheel', (e) => { e.preventDefault(); const z = this.map.zoom * (e.deltaY < 0 ? 1.2 : 1 / 1.2); const w = this.screenToWorld(e); this.map.zoom = clamp(z, 1, 8); const w2 = this.screenToWorld(e); this.map.cx += w[0] - w2[0]; this.map.cz += w[1] - w2[1]; }, { passive: false });
-    c.addEventListener('mousedown', (e) => { if (e.button === 0) this.map.drag = { x: e.clientX, y: e.clientY, cx: this.map.cx, cz: this.map.cz, moved: false }; });
-    window.addEventListener('mousemove', (e) => { const d = this.map.drag; if (!d) return; const r = c.getBoundingClientRect(); const mpp = 2000 / this.map.zoom / r.width; this.map.cx = d.cx - (e.clientX - d.x) * mpp; this.map.cz = d.cz - (e.clientY - d.y) * mpp; if (Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) > 4) d.moved = true; });
-    window.addEventListener('mouseup', (e) => { const d = this.map.drag; this.map.drag = null; if (d && !d.moved && e.target === c && e.detail === 2) this.setMarker(e); });
+    const c = $('bigmap'); c.style.touchAction = 'none';
+    const ptrs = new Map(); let pinch = null, lastTap = 0;
+    c.addEventListener('wheel', (e) => { e.preventDefault(); this.zoomAt(e, e.deltaY < 0 ? 1.2 : 1 / 1.2); }, { passive: false });
+    c.addEventListener('pointerdown', (e) => {
+      if (e.button === 2) return;
+      c.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (ptrs.size === 1) this.map.drag = { x: e.clientX, y: e.clientY, cx: this.map.cx, cz: this.map.cz, moved: false };
+      if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), z: this.map.zoom }; this.map.drag = null; }
+    });
+    c.addEventListener('pointermove', (e) => {
+      if (!ptrs.has(e.pointerId)) return; ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch && ptrs.size >= 2) { const [a, b] = [...ptrs.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y); const mid = { clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 }; this.zoomAt(mid, (pinch.z * d / pinch.d) / this.map.zoom); return; }
+      const d = this.map.drag; if (!d) return; const r = c.getBoundingClientRect(); const mpp = 2000 / this.map.zoom / r.width;
+      this.map.cx = d.cx - (e.clientX - d.x) * mpp; this.map.cz = d.cz - (e.clientY - d.y) * mpp; if (Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) > 6) d.moved = true;
+    });
+    const end = (e) => {
+      if (!ptrs.has(e.pointerId)) return; ptrs.delete(e.pointerId);
+      if (ptrs.size < 2) pinch = null;
+      const d = this.map.drag; this.map.drag = null;
+      if (d && !d.moved && ptrs.size === 0) { const now = performance.now(); if (now - lastTap < 350) { this.setMarker(e); lastTap = 0; } else lastTap = now; }
+    };
+    c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
     c.addEventListener('contextmenu', (e) => { e.preventDefault(); this.setMarker(e); });
     window.addEventListener('resize', () => this.fitMap());
   }
+  zoomAt(e, f) { const w = this.screenToWorld(e); this.map.zoom = clamp(this.map.zoom * f, 1, 8); const w2 = this.screenToWorld(e); this.map.cx += w[0] - w2[0]; this.map.cz += w[1] - w2[1]; }
   setMarker(e) {
     const w = this.screenToWorld(e); const me = this.g.me;
     if (me.marker && Math.hypot(me.marker[0] - w[0], me.marker[1] - w[1]) < 30 / this.map.zoom) me.marker = null; else me.marker = w;
@@ -429,8 +547,8 @@ export class Hud {
     if (gearHtml !== this.lastGear) { $('gear').innerHTML = gearHtml; this.lastGear = gearHtml; }
     // weapon panel
     const held = g.heldWeapon();
-    const slotHtml = [0, 1, 2].map((i) => { const w = me.slots[i]; return w ? `<div class="slot ${me.held === i ? 'on' : ''}"><span class="k">${i + 1}</span>${escapeHtml(WEAPONS[w.id].name)}</div>` : ''; }).join('') +
-      ((me.inv.frag || me.inv.smoke) ? `<div class="slot ${me.held === 3 ? 'on' : ''}"><span class="k">5</span>${me.inv.frag ? '수류탄 ' + me.inv.frag : ''}${me.inv.frag && me.inv.smoke ? ' · ' : ''}${me.inv.smoke ? '연막 ' + me.inv.smoke : ''}</div>` : '');
+    const slotHtml = [0, 1, 2].map((i) => { const w = me.slots[i]; return w ? `<div class="slot pe ${me.held === i ? 'on' : ''}" data-i="${i}"><span class="k">${i + 1}</span>${escapeHtml(WEAPONS[w.id].name)}</div>` : ''; }).join('') +
+      ((me.inv.frag || me.inv.smoke) ? `<div class="slot pe ${me.held === 3 ? 'on' : ''}" data-i="3"><span class="k">5</span>${me.inv.frag ? '수류탄 ' + me.inv.frag : ''}${me.inv.frag && me.inv.smoke ? ' · ' : ''}${me.inv.smoke ? '연막 ' + me.inv.smoke : ''}</div>` : '');
     if (slotHtml !== this.lastSlots) { $('slots').innerHTML = slotHtml; this.lastSlots = slotHtml; }
     if (held) {
       const st = g.wstats(held); const d = st.d;
