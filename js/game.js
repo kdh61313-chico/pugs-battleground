@@ -595,6 +595,7 @@ export class Game {
     const dist = Math.hypot(a.pos.x - this.camera.position.x, a.pos.z - this.camera.position.z);
     if (!a.quiet) this.fx.muzzle(o, _v2, 1, dist < 60);
     this.audio.gun(def.cat, o, { quiet: a.quiet });
+    if (a.team !== this.myTeam || this.match.mode === 1) { const dm = Math.hypot(a.pos.x - this.me.pos.x, a.pos.z - this.me.pos.z); if (dm < (a.quiet ? 70 : 320)) this.hud.soundPing(a.pos.x, a.pos.z, 'shot', dm); }
   }
 
   // ===================== zone =====================
@@ -653,7 +654,7 @@ export class Game {
         if (d2 < 260 * 260 || a.st !== ch.lastSt) ch.animate(dt, { st: a.st, speed: spd, vx: lvx, vz: lvz, crouch: a.crouch, prone: a.prone, sprint: a.sprint, pitch: a.pitch, armed: !!a.w, ads: !!(a.flags & 4), reload: rel });
         ch.lastSt = a.st;
         // footsteps
-        if (a.st === 'ground' && spd > 1.5 && d2 < 45 * 45) { a.stepT -= dt * spd; if (a.stepT <= 0) { a.stepT = 2.1; this.audio.step(a.pos, a.sprint ? 0.9 : a.crouch ? 0.2 : 0.55); } }
+        if (a.st === 'ground' && spd > 1.5 && d2 < 45 * 45) { a.stepT -= dt * spd; if (a.stepT <= 0) { a.stepT = 2.1; this.audio.step(a.pos, a.sprint ? 0.9 : a.crouch ? 0.2 : 0.55); if (!a.crouch && d2 < (a.sprint ? 32 * 32 : 20 * 20) && (a.team !== this.myTeam || this.match.mode === 1)) this.hud.soundPing(a.pos.x, a.pos.z, 'step', Math.sqrt(d2)); } }
       }
     }
     const gm = glintMaterial(); gm.opacity = 0.35 + 0.3 * Math.sin(performance.now() / 300);

@@ -37,7 +37,7 @@ const scene = new THREE.Scene();
 const FOG = new THREE.Color(0xb8cbdb);
 scene.fog = new THREE.Fog(FOG, 250, 1900);
 scene.background = FOG;
-const camera = new THREE.PerspectiveCamera(settings.fov, innerWidth / innerHeight, 0.05, 6000);
+const camera = new THREE.PerspectiveCamera(settings.fov, innerWidth / innerHeight, 0.1, 6000); // near 0.1 doubles depth precision vs 0.05
 scene.add(camera);
 const hemi = new THREE.HemisphereLight(0xd6e6ff, 0x6a6250, 1.15); scene.add(hemi);
 const sun = new THREE.DirectionalLight(0xfff0d8, 2.4);
@@ -76,13 +76,16 @@ function setupComposer() {
 let dynScale = 1, slowSec = 0, fastSec = 0;
 function adaptRes(fps) {
   if (document.hidden || fps < 15) return; // <15 usually means the page is throttled in the background, not GPU-bound
-  if (fps < 42) { slowSec++; fastSec = 0; } else if (fps > 57) { fastSec++; slowSec = 0; } else { slowSec = 0; fastSec = 0; }
-  if (slowSec >= 4 && dynScale > 0.6) { dynScale = Math.max(0.6, dynScale - 0.15); slowSec = 0; applyQuality(true); }
-  if (fastSec >= 12 && dynScale < 1) { dynScale = Math.min(1, dynScale + 0.1); fastSec = 0; applyQuality(true); }
+  if (fps < 36) { fastSec = 0; } else if (fps > 55) { fastSec++; slowSec = 0; } else { slowSec = 0; fastSec = 0; }
+  if (settings.dynRes === false) { if (dynScale !== 1) { dynScale = 1; applyQuality(true); } return; }
+  // never drop below 80% so buildings don't turn into blocky pixels; only react to sustained slowness
+  if (fps < 36) { slowSec++; } 
+  if (slowSec >= 5 && dynScale > 0.8) { dynScale = Math.max(0.8, dynScale - 0.1); slowSec = 0; applyQuality(true); }
+  if (fastSec >= 10 && dynScale < 1) { dynScale = Math.min(1, dynScale + 0.1); fastSec = 0; applyQuality(true); }
 }
 function applyQuality(keepComposer) {
   const q = settings.quality;
-  const pr = (q === 'low' ? Math.min(devicePixelRatio, 1) * 0.8 : q === 'med' ? Math.min(devicePixelRatio, 1.25) : Math.min(devicePixelRatio, 1.6)) * dynScale;
+  const pr = (q === 'low' ? Math.min(devicePixelRatio, 1) * 0.9 : q === 'med' ? Math.min(devicePixelRatio, 1.25) : Math.min(devicePixelRatio, 1.6)) * dynScale;
   renderer.setPixelRatio(pr);
   renderer.setSize(innerWidth, innerHeight, false);
   sun.castShadow = q !== 'low';
@@ -143,7 +146,7 @@ app.applyQuality = applyQuality;
 
 // ---------- input ----------
 const inp = game.input;
-const GAME_KEYS = new Set(['Tab', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyM', 'KeyC', 'ControlLeft', 'ShiftLeft', 'KeyQ', 'KeyE', 'KeyR', 'KeyB', 'KeyG', 'KeyH', 'KeyT', 'KeyV', 'KeyX', 'KeyY', 'Equal']);
+const GAME_KEYS = new Set(['Tab', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyM', 'KeyC', 'ControlLeft', 'ShiftLeft', 'KeyQ', 'KeyE', 'KeyR', 'KeyB', 'KeyG', 'KeyH', 'KeyT', 'KeyV', 'KeyX', 'KeyY', 'Equal', 'AltLeft']);
 addEventListener('keydown', (e) => {
   if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT')) return;
   if (hud.screen === 'game' && (GAME_KEYS.has(e.code) || e.code.startsWith('Digit'))) e.preventDefault();

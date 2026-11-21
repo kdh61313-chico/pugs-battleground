@@ -385,9 +385,11 @@ function buildWeapon(id, att) {
     P.add(RB(0.03, 0.035, 0.19, 0.008), MET, 0, 0.075, 0.07);
     P.add(RB(0.028, 0.03, 0.17, 0.006), BLK, 0, 0.045, 0.06);
     P.add(RB(0.028, 0.105, 0.045, 0.01), GRP, 0, -0.0, -0.005, 0.22);
-    P.add(BOX(0.004, 0.012, 0.004), BLK, 0, 0.098, 0.15); P.add(BOX(0.02, 0.01, 0.006), BLK, 0, 0.097, -0.02);
+    // iron sights: thin front post + notched rear sight (gap stays open on the sight line)
+    P.add(BOX(0.0035, 0.012, 0.004), BLK, 0, 0.0975, 0.15);
+    for (const sx of [-1, 1]) P.add(BOX(0.006, 0.013, 0.006), BLK, sx * 0.0085, 0.0985, -0.02);
     P.add(BOX(0.012, 0.03, 0.03), BLK, 0, 0.022, 0.035);
-    ud.fore = V(0.01, -0.03, 0.0); ud.mag = V(0, -0.06, 0); ud.muzzle = V(0, 0.075, 0.17); ud.sightY = 0.1; ud.sightZ = 0.0; ud.len = 0.22;
+    ud.fore = V(0.01, -0.03, 0.0); ud.mag = V(0, -0.06, 0); ud.muzzle = V(0, 0.075, 0.17); ud.sightY = 0.1035; ud.sightZ = 0.0; ud.len = 0.22;
   } else {
     const L = { AR: 0.86, SMG: 0.62, DMR: 1.0, SR: 1.12, SG: 0.98, LMG: 1.05 }[cat];
     const recv = cat === 'SMG' ? 0.26 : 0.32;
@@ -406,7 +408,14 @@ function buildWeapon(id, att) {
     P.add(CYL(0.011, 0.012, bl, 10), MET, 0, 0.055, bz0 + bl / 2 - 0.02, Math.PI / 2);
     let mz = bz0 + bl - 0.02;
     // front sight post
-    if (!att.s) { P.add(BOX(0.006, 0.04, 0.01), BLK, 0, 0.1, bz0 - 0.02); P.add(BOX(0.03, 0.03, 0.012), BLK, 0, 0.115, 0.0); }
+    if (!att.s) {
+      // front post (tip exactly on the sight line) + two thin protective ears
+      P.add(BOX(0.005, 0.052, 0.01), BLK, 0, 0.104, bz0 - 0.02);
+      for (const sx of [-1, 1]) P.add(BOX(0.004, 0.05, 0.012), BLK, sx * 0.016, 0.1, bz0 - 0.02);
+      // rear notch: low base + two ears, open gap 16mm wide on the sight line
+      P.add(BOX(0.034, 0.009, 0.014), BLK, 0, 0.1175, 0.0);
+      for (const sx of [-1, 1]) P.add(BOX(0.008, 0.022, 0.014), BLK, sx * 0.012, 0.127, 0.0);
+    }
     // muzzle device
     if (att.m === 'm_supp') { P.add(CYL(0.02, 0.02, 0.17, 12), BLK, 0, 0.055, mz + 0.085, Math.PI / 2); mz += 0.17; }
     else if (att.m === 'm_comp') { P.add(CYL(0.016, 0.016, 0.06, 10), MET, 0, 0.055, mz + 0.03, Math.PI / 2); P.add(BOX(0.03, 0.008, 0.04), BLK, 0, 0.068, mz + 0.03); mz += 0.06; }
@@ -438,13 +447,13 @@ function buildWeapon(id, att) {
     // charging handle
     P.add(BOX(0.02, 0.012, 0.025), MET, 0.035, 0.07, 0.12);
     ud.muzzle = V(0, 0.055, mz); ud.len = mz + 0.25;
-    ud.sightY = att.s ? 0.165 : 0.125; ud.sightZ = 0.05;
+    ud.sightY = att.s ? 0.165 : 0.13; ud.sightZ = 0.05;
     // optics
     if (att.s) {
       const S = att.s; const y0 = 0.125;
       P.add(RB(0.035, 0.018, 0.06, 0.004), BLK, 0, 0.122, 0.04);
-      if (S === 's_red') { P.add(CYL(0.022, 0.024, 0.06, 14, true), BLK, 0, y0 + 0.04, 0.04, Math.PI / 2); P.add(RB(0.03, 0.02, 0.03, 0.006), BLK, 0, y0 + 0.01, 0.04); ud.sightY = y0 + 0.04; }
-      else if (S === 's_holo') { P.add(RB(0.05, 0.04, 0.09, 0.008), BLK, 0, y0 + 0.008, 0.04); for (const s of [1, -1]) P.add(BOX(0.006, 0.05, 0.08), BLK, 0.024 * s, y0 + 0.045, 0.04); P.add(BOX(0.05, 0.006, 0.08), BLK, 0, y0 + 0.07, 0.04); ud.sightY = y0 + 0.045; }
+      if (S === 's_red') { for (const rz of [0.012, 0.068]) P.add(new THREE.TorusGeometry(0.023, 0.0045, 6, 22), BLK, 0, y0 + 0.04, rz); P.add(BOX(0.006, 0.004, 0.058), BLK, 0, y0 + 0.066, 0.04); P.add(RB(0.03, 0.02, 0.03, 0.006), BLK, 0, y0 + 0.01, 0.04); ud.sightY = y0 + 0.04; }
+      else if (S === 's_holo') { P.add(RB(0.05, 0.026, 0.09, 0.008), BLK, 0, y0 + 0.002, 0.04); for (const s of [1, -1]) P.add(BOX(0.004, 0.05, 0.03), BLK, 0.025 * s, y0 + 0.04, 0.07); P.add(BOX(0.054, 0.004, 0.03), BLK, 0, y0 + 0.065, 0.07); ud.sightY = y0 + 0.042; }
       else {
         const sl = S === 's_2x' ? 0.12 : S === 's_4x' ? 0.2 : 0.28, sr = S === 's_8x' ? 0.022 : 0.019;
         P.add(CYL(sr, sr, sl, 14), BLK, 0, y0 + 0.045, 0.04, Math.PI / 2);

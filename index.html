@@ -139,6 +139,13 @@ select.field{padding:9px 10px}
 .qi b{display:block;font-family:Rajdhani;font-size:16px;color:#fff}
 .qi.none{opacity:.3}
 #cross{position:absolute;left:50%;top:50%;width:0;height:0}
+#sndRing{position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none}
+#sndRing .sp{position:absolute;left:-26px;top:-130px;width:52px;height:20px;transform-origin:26px 130px;border-top:4px solid rgba(255,255,255,.85);border-radius:50% 50% 0 0/100% 100% 0 0;filter:drop-shadow(0 0 2px #000);transition:opacity .25s}
+#sndRing .sp.shot{border-top-color:#ff5a4a;border-top-width:5px}
+#sndRing .sp.step{border-top-color:#ffd24a}
+#itemTags{position:absolute;inset:0;pointer-events:none}
+#itemTags span{position:absolute;transform:translate(-50%,-100%);font-size:11px;font-weight:600;color:#fff;background:rgba(0,0,0,.45);padding:1px 6px;border-radius:3px;white-space:nowrap;text-shadow:0 1px 1px #000}
+#itemTags span.hi{color:#ffd76a}
 #cross i{position:absolute;background:#fff;box-shadow:0 0 2px #000}
 #cross .t,#cross .b{width:2px;height:8px;left:-1px}
 #cross .l,#cross .r{height:2px;width:8px;top:-1px}
@@ -357,6 +364,8 @@ body.touch .menuFoot{display:none}
   <div id="topRight"><div class="counts"><div class="cbox">생존<b id="cAlive">0</b></div><div class="cbox k">처치<b id="cKills">0</b></div></div><div id="feed"></div></div>
   <div id="netWarn">⚠ 연결 재시도 중…</div>
   <div id="teamList"></div>
+  <div id="sndRing"></div>
+  <div id="itemTags"></div>
   <div id="cross"><i class="t"></i><i class="b"></i><i class="l"></i><i class="r"></i><i class="c"></i></div>
   <div id="hitm"><i></i><i></i><i></i><i></i></div>
   <div id="dirs"></div>
@@ -396,6 +405,9 @@ body.touch .menuFoot{display:none}
   <div class="sr">그래픽 품질<select id="oQ" class="field" style="max-width:240px"><option value="low">낮음 (빠름)</option><option value="med">중간 (권장)</option><option value="high">높음 (블룸·고급 그림자)</option></select></div>
   <div class="sr">상하 반전<input type="checkbox" id="oInv"></div>
   <div class="sr">FPS 표시<input type="checkbox" id="oFps"></div>
+  <div class="sr">해상도 자동 조절 (끄면 항상 선명)<input type="checkbox" id="oDyn"></div>
+  <div class="sr">소리 방향 표시 (총성·발소리)<input type="checkbox" id="oSnd"></div>
+  <div class="sr">근처 아이템 이름 표시<input type="checkbox" id="oTags"></div>
   <div class="sr">자동 줍기 (탄약·회복·상위 장비)<input type="checkbox" id="oAuto"></div>
   <div class="sr">조준 토글 (우클릭 한 번)<input type="checkbox" id="oAdsT"></div>
   <div class="sr">터치 시점 감도<input type="range" id="oTouch" min="0.3" max="3" step="0.05"><span id="oTouchV"></span></div>
@@ -409,6 +421,7 @@ body.touch .menuFoot{display:none}
     <kbd>R</kbd><span>재장전 · <b>B</b> 사격 모드 변경</span>
     <kbd>1 2 3 4 5</kbd><span>주무기1 · 주무기2 · 권총 · 맨손 · 투척무기(다시 누르면 종류 변경)</span>
     <kbd>F</kbd><span>줍기 · 낙하 · 낙하산 펼치기 · 팀원 부활(길게) · <b>Shift+F</b> 주변 모두 줍기</span>
+    <kbd>Alt</kbd><span>누르고 있으면 자유 시점 (3인칭 주변 둘러보기)</span>
     <kbd>=</kbd><span>자동 달리기 (W/S로 해제) · 탄약·회복·상위 장비는 자동 줍기 (설정에서 끄기)</span>
     <kbd>Tab</kbd><span>인벤토리 (부착물 장착/해제, 아이템 버리기)</span>
     <kbd>M</kbd><span>지도 (우클릭으로 마커) · <b>T</b> 조준 지점 마커</span>

@@ -333,9 +333,13 @@ export const PlayerMixin = {
     // look
     if (locked) {
       const sens = 0.0021 * S.sens * (me.ads ? 1 / Math.max(1, this.curZoom || 1) * (S.adsSens || 1) : 1);
-      me.yaw -= inp.dx * sens; me.pitch -= inp.dy * sens * (S.invertY ? -1 : 1);
+      const free = inp.down.has('AltLeft') && !me.ads && !me.fpp && (me.st === 'ground' || me.st === 'fall' || me.st === 'chute' || me.st === 'plane' || me.st === 'swim');
+      if (free) { me.freeYaw = clamp((me.freeYaw || 0) - inp.dx * sens, -2.4, 2.4); me.freePitch = clamp((me.freePitch || 0) - inp.dy * sens * (S.invertY ? -1 : 1), -0.9, 0.9); }
+      else { me.yaw -= inp.dx * sens; me.pitch -= inp.dy * sens * (S.invertY ? -1 : 1); }
       me.pitch = clamp(me.pitch, -1.45, 1.45);
+      me.freeLook = free;
     }
+    if (!me.freeLook && (me.freeYaw || me.freePitch)) { const k = Math.min(1, dt * 12); me.freeYaw -= me.freeYaw * k; me.freePitch -= me.freePitch * k; if (Math.abs(me.freeYaw) < 0.002) me.freeYaw = 0; if (Math.abs(me.freePitch) < 0.002) me.freePitch = 0; }
     inp.dx = inp.dy = 0;
     const key = (c) => locked && inp.down.has(c);
     const press = (c) => locked && inp.pressed.has(c);
@@ -440,6 +444,7 @@ export const PlayerMixin = {
       // pick the one closest to the view direction
       let best = me.nearby[0]; let bs = 1e9;
       for (const n of me.nearby) { const ang = Math.abs(angDiff(me.yaw, Math.atan2(n.it.x - me.pos.x, n.it.z - me.pos.z))); const s = n.d + ang * 0.6; if (s < bs) { bs = s; best = n; } }
+      me.pickTarget = best;
       const info = itemInfo(best.it.type);
       prompt = `[F] ${best.crate ? (best.crate.kind === 'care' ? '보급 · ' : '상자 · ') : ''}${info.name}${best.it.qty > 1 ? ' ×' + best.it.qty : ''}`;
       if (press('KeyF')) { if (key('ShiftLeft')) this.pickupAll(); else this.pickup(best); }
@@ -621,6 +626,20 @@ export const PlayerMixin = {
     this.hud.recoilPulse();
     if (w.mag === 0 && me.inv[d.ammo] > 0) setTimeout(() => { if (this.heldWeapon() === w && !me.action) this.startReload(); }, 250);
   },
+  throwArc() {
+    const me = this.me; const show = me.held === 3 && me.st === 'ground' && !me.action && (me.inv[me.throwSel] || 0) > 0;
+    if (!show) { this.fx.arc(null); return; }
+    const cam = this.camera; cam.getWorldDirection(_t);
+    const p = new THREE.Vector3(me.pos.x, me.pos.y + 1.6, me.pos.z).addScaledVector(_t, 0.5);
+    const v = _t.clone().multiplyScalar(me.ads ? 12 : 19).add(new THREE.Vector3(0, 3, 0)).add(me.vel);
+    const pts = [p.clone()]; const dt = 1 / 30; let hitP = null;
+    for (let i = 0; i < 120 && !hitP; i++) {
+      v.y -= 9.8 * dt; const sp = v.length(); const h = this.world.raycast(p.x, p.y, p.z, v.x / sp, v.y / sp, v.z / sp, sp * dt + 0.05, true);
+      if (h) { p.addScaledVector(v, h.t / sp); hitP = p.clone(); } else p.addScaledVector(v, dt);
+      pts.push(p.clone());
+    }
+    this.fx.arc(pts, hitP, me.throwSel === 'frag' ? 0xff7a3a : 0xdddddd);
+  },
   throwGrenade() {
     const me = this.me; const type = me.throwSel;
     if (this.invTake(type, 1) <= 0) { me.cook = -1; return; }
@@ -659,7 +678,7 @@ export const PlayerMixin = {
   updateCamera(dt) {
     const me = this.me, cam = this.camera, W = this.world, S = this.settings;
     const held = this.heldWeapon(); const st = held ? this.wstats(held) : null;
-    const yaw = me.yaw + me.kickYaw * 0.4, pitch = me.pitch + me.kick * 0.5;
+    const yaw = me.yaw + me.kickYaw * 0.4 + (me.freeYaw || 0), pitch = clamp(me.pitch + me.kick * 0.5 + (me.freePitch || 0), -1.5, 1.5);
     this.camYaw = yaw;
     const cp = Math.cos(pitch);
     const fwd = _f.set(Math.sin(yaw) * cp, Math.sin(pitch), Math.cos(yaw) * cp);
@@ -721,6 +740,7 @@ export const PlayerMixin = {
     const reload = me.action && me.action.kind === 'reload' ? me.action.t / me.action.dur : -1;
     if (ch.group.visible || me.st === 'dead') ch.animate(dt, { st: me.st, speed: me.st === 'fall' || me.st === 'chute' ? 0 : me.hspeed, vx: lv[0], vz: lv[1], crouch: me.crouch || !!me.mantle, prone: me.prone, sprint: me.sprinting, pitch: me.pitch, armed: !!held && me.st === 'ground' && !me.mantle, punch: me.punchAnim, lean: me.lean, ads: me.ads, reload });
     this.updateViewModel(dt, held, st);
+    this.throwArc();
     this.audio.setListener(cam.position.x, cam.position.y, cam.position.z, yaw);
   },
   localVel(v, yaw) { const c = Math.cos(yaw), sn = Math.sin(yaw); return [v.x * c - v.z * sn, v.x * sn + v.z * c]; },
@@ -767,7 +787,7 @@ export const PlayerMixin = {
     this.vmBobT = (this.vmBobT || 0) + dt * (me.hspeed > 0.5 ? 2 + me.hspeed * 1.3 : 1.2);
     const bobA = (me.hspeed > 0.5 ? Math.min(1, me.hspeed / 5) : 0.15) * (1 - k * 0.85);
     const bx = Math.cos(this.vmBobT) * 0.012 * bobA, by = Math.abs(Math.sin(this.vmBobT)) * 0.014 * bobA;
-    const er = ud.pistol ? 0.42 : held.att.s ? 0.2 : 0.24;
+    const er = ud.pistol ? 0.45 : held.att.s ? 0.3 : 0.27;
     // ADS: sight line at screen center
     const adsP = [0, -ud.sightY, ud.sightZ - er];
     const hipP = ud.pistol ? [0.16, -0.17, -0.38] : [0.14, -0.12 - ud.sightY * 0.6, ud.sightZ - 0.34];

@@ -144,6 +144,9 @@ export class Hud {
     if (S.touchSens == null) S.touchSens = 1; bindR('oTouch', 'touchSens', (v) => v.toFixed(2));
     $('oQ').value = S.quality; $('oQ').onchange = (e) => { S.quality = e.target.value; g.saveSettings(); g.app.applyQuality(); };
     $('oInv').checked = !!S.invertY; $('oInv').onchange = (e) => { S.invertY = e.target.checked; g.saveSettings(); };
+    $('oSnd').checked = S.soundViz !== false; $('oSnd').onchange = (e) => { S.soundViz = e.target.checked; g.saveSettings(); };
+    $('oTags').checked = S.itemTags !== false; $('oTags').onchange = (e) => { S.itemTags = e.target.checked; g.saveSettings(); };
+    $('oDyn').checked = S.dynRes !== false; $('oDyn').onchange = (e) => { S.dynRes = e.target.checked; g.saveSettings(); };
     $('oAuto').checked = S.autoPick !== false; $('oAuto').onchange = (e) => { S.autoPick = e.target.checked; g.saveSettings(); };
     $('oAdsT').checked = !!S.adsToggle; $('oAdsT').onchange = (e) => { S.adsToggle = e.target.checked; g.saveSettings(); };
     $('oFps').checked = !!S.showFps; $('oFps').onchange = (e) => { S.showFps = e.target.checked; g.saveSettings(); $('fps').style.display = S.showFps ? 'block' : 'none'; };
@@ -502,6 +505,40 @@ export class Hud {
   }
 
   // ---------- per-frame ----------
+  soundPing(x, z, kind, dist) {
+    if (this.g.settings.soundViz === false) return;
+    const P = (this.pings = this.pings || []);
+    const near = P.find((p) => p.kind === kind && Math.hypot(p.x - x, p.z - z) < 6);
+    if (near) { near.x = x; near.z = z; near.t = 0; return; }
+    if (P.length > 10) P.shift();
+    const el = document.createElement('div'); el.className = 'sp ' + kind; $('sndRing').appendChild(el);
+    P.push({ x, z, kind, t: 0, el, s: kind === 'shot' ? clamp(1.6 - dist / 220, 0.6, 1.6) : clamp(1.3 - dist / 30, 0.5, 1.3) });
+  }
+  drawPings(dt) {
+    const P = this.pings; if (!P || !P.length) return;
+    const g = this.g, me = g.me, br = (g.camYaw ?? me.yaw);
+    for (let i = P.length - 1; i >= 0; i--) {
+      const p = P[i]; p.t += dt; const life = p.kind === 'shot' ? 1.6 : 0.9;
+      if (p.t > life || me.st === 'dead' || me.st === 'spec') { p.el.remove(); P.splice(i, 1); continue; }
+      const ang = Math.atan2(p.x - me.pos.x, p.z - me.pos.z); let rel = br - ang; // screen-clockwise angle
+      p.el.style.transform = `rotate(${rel}rad) scaleX(${p.s})`; p.el.style.opacity = String(1 - p.t / life);
+    }
+  }
+  drawItemTags() {
+    const g = this.g, me = g.me, box = $('itemTags');
+    if (g.settings.itemTags === false || me.st !== 'ground' || g.scopeView || !me.nearby || this.anyOverlay()) { if (this.lastTags) { box.innerHTML = ''; this.lastTags = ''; } return; }
+    const cam = g.camera, W = innerWidth, H = innerHeight; const out = []; const v = this.tagV || (this.tagV = cam.position.clone());
+    const best = me.nearby.length ? me.pickTarget : null;
+    const now = performance.now(); if (!this.tagList || now - this.tagT > 200) { this.tagT = now; this.tagList = g.nearbyItems(me.pos, 9).slice(0, 8); }
+    for (const n0 of this.tagList) {
+      const n = best && !best.crate && n0.it === best.it ? best : n0;
+      if (n.crate || !g.items.has(n.it.id) || n === best) continue; // the [F] prompt already names the target
+      const it = n.it; v.set(it.x, it.y + 0.35, it.z).project(cam); if (v.z > 1 || Math.abs(v.x) > 1 || Math.abs(v.y) > 1) continue;
+      const info = itemInfo(it.type); const worth = g.autoWorth && g.autoWorth(it);
+      out.push(`<span class="${worth ? 'hi' : ''}" style="left:${((v.x + 1) / 2 * W) | 0}px;top:${((1 - v.y) / 2 * H) | 0}px">${escapeHtml(info.name)}${it.qty > 1 ? ' ×' + it.qty : ''}${worth ? ' ★' : ''}</span>`);
+    }
+    const html = out.join(''); if (html !== this.lastTags) { box.innerHTML = html; this.lastTags = html; }
+  }
   update(dt) {
     if (this.screen !== 'game') return;
     const g = this.g, me = g.me, m = g.match; if (!m) return;
@@ -534,6 +571,7 @@ export class Hud {
       } else rt.style.display = 'none';
       $('zoneVig').style.opacity = alive && me.outside && me.st !== 'plane' ? 1 : 0;
     }
+    this.drawPings(dt); this.drawItemTags();
     // minimap
     this.drawMini();
     if ($('map').classList.contains('on')) { const span = 2000 / this.map.zoom; this.big.clearRect(0, 0, 1600, 1600); this.drawMapLayer(this.big, 1600, this.mapX0(), this.mapZ0(), span, { grid: true }); }
@@ -653,5 +691,6 @@ function scopeSvg(kind) {
 function reticleSvg(kind) {
   if (kind === 'dot') return '<svg width="40" height="40" viewBox="-20 -20 40 40" style="position:absolute;left:-20px;top:-20px"><circle r="1.8" fill="#ff2a2a"/><circle r="3" fill="none" stroke="rgba(255,60,60,.35)" stroke-width="1"/></svg>';
   if (kind === 'holo') return '<svg width="60" height="60" viewBox="-30 -30 60 60" style="position:absolute;left:-30px;top:-30px"><circle r="11" fill="none" stroke="#ff3030" stroke-width="1.4"/><circle r="1.3" fill="#ff3030"/><line x1="-15" y1="0" x2="-11" y2="0" stroke="#ff3030" stroke-width="1.4"/><line x1="11" y1="0" x2="15" y2="0" stroke="#ff3030" stroke-width="1.4"/><line x1="0" y1="11" x2="0" y2="15" stroke="#ff3030" stroke-width="1.4"/></svg>';
-  return '<svg width="60" height="60" viewBox="-30 -30 60 60" style="position:absolute;left:-30px;top:-30px"><rect x="-1.3" y="-1" width="2.6" height="10" fill="#111" stroke="#fff" stroke-width=".4"/><path d="M-14 9 h9 v-6 h2 v8 h-11z M14 9 h-9 v-6 h-2 v8 h11z" fill="#111" stroke="#fff" stroke-width=".4"/></svg>';
+  // iron sights: the 3D sights do the work, this tiny dot just marks the exact point of impact
+  return '<svg width="20" height="20" viewBox="-10 -10 20 20" style="position:absolute;left:-10px;top:-10px"><circle r="1.5" fill="#fff" stroke="rgba(0,0,0,.7)" stroke-width=".8"/></svg>';
 }

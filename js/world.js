@@ -213,7 +213,9 @@ export class World {
     const mat = new THREE.MeshStandardMaterial({ color: 0x9fc4d8, transparent: true, opacity: 0.34, roughness: 0.05, metalness: 0.5, depthWrite: false });
     const im = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), mat, n);
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion();
-    this.glassPanes.forEach((a, i) => { m4.compose(new THREE.Vector3((a[0] + a[3]) / 2, (a[1] + a[4]) / 2, (a[2] + a[5]) / 2), q, new THREE.Vector3(a[3] - a[0], a[4] - a[1], a[5] - a[2])); im.setMatrixAt(i, m4); });
+    // visual pane is inset from the opening (so it never shares a plane with reveals/frames) and paper-thin
+    this.glassPanes.forEach((a, i) => { const sx = a[3] - a[0], sy = a[4] - a[1], sz = a[5] - a[2]; const thinX = sx < sz;
+      m4.compose(new THREE.Vector3((a[0] + a[3]) / 2, (a[1] + a[4]) / 2, (a[2] + a[5]) / 2), q, new THREE.Vector3(thinX ? 0.012 : sx - 0.03, sy - 0.03, thinX ? sz - 0.03 : 0.012)); im.setMatrixAt(i, m4); });
     im.instanceMatrix.needsUpdate = true; im.renderOrder = 3;
     this.scene.add(im); this.glassMesh = im;
   }
@@ -503,8 +505,10 @@ export class World {
         const prev = this.bMain.cur; this.M(4);
         const fc = this.frameColor || C(0xe8e4dc), ft = t + 0.04, fw = 0.07;
         const fr = (a0, b0, a1, b1) => { if (axis === 'x') this.lbox(f, a0, y0 + b0, c - ft / 2, a1, y0 + b1, c + ft / 2, fc, false); else this.lbox(f, c - ft / 2, y0 + b0, a0, c + ft / 2, y0 + b1, a1, fc, false); };
-        fr(o[0] - fw, o[2] - (o[4] ? fw : 0), o[0], o[3] + fw); fr(o[1], o[2] - (o[4] ? fw : 0), o[1] + fw, o[3] + fw); fr(o[0] - fw, o[3], o[1] + fw, o[3] + fw);
-        if (o[4]) { fr(o[0] - fw, o[2] - fw, o[1] + fw, o[2]); const sw = t + 0.16; if (axis === 'x') this.lbox(f, o[0] - 0.1, y0 + o[2] - 0.09, c - sw / 2, o[1] + 0.1, y0 + o[2] - 0.03, c + sw / 2, C(0xb8b4ac), false); else this.lbox(f, c - sw / 2, y0 + o[2] - 0.09, o[0] - 0.1, c + sw / 2, y0 + o[2] - 0.03, o[1] + 0.1, C(0xb8b4ac), false);
+        // frames reach 12mm into the opening so their faces never coincide with the wall's reveal faces (no flicker)
+        const ii = 0.012;
+        fr(o[0] - fw, o[2] - (o[4] ? fw : 0), o[0] + ii, o[3] + fw); fr(o[1] - ii, o[2] - (o[4] ? fw : 0), o[1] + fw, o[3] + fw); fr(o[0] + ii, o[3] - ii, o[1] - ii, o[3] + fw);
+        if (o[4]) { fr(o[0] + ii, o[2] - fw, o[1] - ii, o[2] + ii); const sw = t + 0.16; if (axis === 'x') this.lbox(f, o[0] - 0.1, y0 + o[2] - 0.09, c - sw / 2, o[1] + 0.1, y0 + o[2] - 0.03, c + sw / 2, C(0xb8b4ac), false); else this.lbox(f, c - sw / 2, y0 + o[2] - 0.09, o[0] - 0.1, c + sw / 2, y0 + o[2] - 0.03, o[1] + 0.1, C(0xb8b4ac), false);
           // mullion
           const mid = (o[0] + o[1]) / 2; fr(mid - 0.025, o[2], mid + 0.025, o[3]); }
         this.M(prev);
@@ -571,7 +575,7 @@ export class World {
         const lane = (fl - 1) % 2 === 0 ? laneA : laneB;
         this.slab(f, -hw + t, -hd + t, hw - t, hd - t, y0 - 0.25, y0, floorC, [lane[0] - 0.05, zS - 0.15, lane[1] + 0.05, zS + run + 0.1]);
       } else {
-        this.lbox(f, -hw + t, ground - 0.02, -hd + t, hw - t, ground, hd - t, floorC, false);
+        this.lbox(f, -hw + t, ground - 0.01, -hd + t, hw - t, ground + 0.012, hd - t, floorC, false); // sits 12mm proud of the foundation (no flicker)
       }
       // interior partition walls
       this.M(1);

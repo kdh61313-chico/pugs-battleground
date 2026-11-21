@@ -150,6 +150,25 @@ export class Effects {
     for (let i = 0; i < 6; i++) this.smoke.spawn(x + nx * 0.05, y + ny * 0.05, z + nz * 0.05, nx * 1.5 + (Math.random() - 0.5) * 1.5, ny * 1.5 + Math.random(), nz * 1.5 + (Math.random() - 0.5) * 1.5, 0.15, dust[0], dust[1], dust[2], 0.7, 0.9, 1.5, 0.6, 2);
     if (kind === 'box') for (let i = 0; i < 5; i++) this.glow.spawn(x, y, z, nx * 4 + (Math.random() - 0.5) * 5, ny * 4 + Math.random() * 3, nz * 4 + (Math.random() - 0.5) * 5, 0.05, 1, 0.75, 0.4, 1, 0.25, 9);
   }
+  // grenade throw preview: dotted arc + landing ring
+  arc(pts, hit, color = 0xffffff) {
+    if (!this.arcObj) {
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(130 * 3), 3));
+      this.arcLine = new THREE.Line(g, new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.35, gapSize: 0.25, transparent: true, opacity: 0.85, depthTest: false }));
+      this.arcLine.renderOrder = 10; this.arcLine.frustumCulled = false;
+      const rg = new THREE.RingGeometry(0.75, 0.95, 28); rg.rotateX(-Math.PI / 2);
+      this.arcRing = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, depthTest: false }));
+      this.arcRing.renderOrder = 10;
+      this.arcObj = new THREE.Group(); this.arcObj.add(this.arcLine, this.arcRing); this.scene.add(this.arcObj);
+    }
+    if (!pts) { this.arcObj.visible = false; return; }
+    this.arcObj.visible = true;
+    const a = this.arcLine.geometry.attributes.position; const n = Math.min(pts.length, 130);
+    for (let i = 0; i < n; i++) a.setXYZ(i, pts[i].x, pts[i].y, pts[i].z);
+    a.needsUpdate = true; this.arcLine.geometry.setDrawRange(0, n); this.arcLine.computeLineDistances();
+    this.arcLine.material.color.setHex(color); this.arcRing.material.color.setHex(color);
+    this.arcRing.visible = !!hit; if (hit) this.arcRing.position.set(hit.x, hit.y + 0.05, hit.z);
+  }
   glass(x, y, z) {
     for (let i = 0; i < 26; i++) this.glow.spawn(x + (Math.random() - 0.5) * 0.9, y + (Math.random() - 0.5) * 0.8, z + (Math.random() - 0.5) * 0.9, (Math.random() - 0.5) * 3.5, Math.random() * 2, (Math.random() - 0.5) * 3.5, 0.04 + Math.random() * 0.05, 0.75, 0.88, 1.0, 0.9, 0.7 + Math.random() * 0.5, 9.8, 0, 0.5);
     for (let i = 0; i < 6; i++) this.smoke.spawn(x, y, z, (Math.random() - 0.5) * 1.5, Math.random(), (Math.random() - 0.5) * 1.5, 0.25, 0.85, 0.9, 0.95, 0.25, 0.6, 0, 0.6, 1);
